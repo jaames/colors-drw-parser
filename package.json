@@ -1,0 +1,16 @@
+{
+  "name": "colors-drw-parser",
+  "version": "0.0.1",
+  "description": "Experimental parser and renderer for Colors! painting files",
+  "devDependencies": {
+    "parcel-bundler": "^1.12.4",
+    "typescript": "^3.7.4"
+  },
+  "scripts": {
+    "dev": "parcel index.html",
+    "build": "parcel build index.ts"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC"
+}
