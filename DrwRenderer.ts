@@ -22,7 +22,7 @@ interface ToolState {
   color: Color,
   brushType: BrushType,
   brushControl: BrushControl,
-  brushSize: number;
+  brushRadius: number;
   opacity: number,
   layer: number,
   user: number,
@@ -34,25 +34,17 @@ interface ToolState {
 class DrwLayer {
   public canvas: HTMLCanvasElement;
   public ctx: CanvasRenderingContext2D;
-  public width: number;
-  public height: number;
 
-  constructor (width: number, height: number) {
-    this.width = width;
-    this.height = height;
+  constructor () {
     this.canvas = document.createElement('canvas');
     this.ctx = this.canvas.getContext('2d');
-    this.canvas.width = this.width;
-    this.canvas.height = this.height;
-    this.ctx.lineCap = 'round';
-    this.ctx.lineJoin = 'round';
   }
 }
 
 export class DrwRenderer {
 
-  public width: number = 320;
-  public height: number = 240;
+  public width: number;
+  public height: number;
   public drw: DrwParser;
   public layers: DrwLayer[];
   public canvas: HTMLCanvasElement;
@@ -63,7 +55,7 @@ export class DrwRenderer {
     color: [0, 0, 0],
     brushType: BrushType.BRUSHTYPE_HARD,
     brushControl: BrushControl.BRUSHCONTROL_VARIABLEOPACITY,
-    brushSize: 20,
+    brushRadius: 20,
     opacity: 1,
     pressure: 0,
     user: 0,
@@ -79,21 +71,26 @@ export class DrwRenderer {
     this.canvas.width = this.width;
     this.canvas.height = this.height;
     this.layers = [
-      new DrwLayer(this.width, this.height),
-      new DrwLayer(this.width, this.height),
-      new DrwLayer(this.width, this.height),
-      new DrwLayer(this.width, this.height),
-      new DrwLayer(this.width, this.height),
+      new DrwLayer(),
+      new DrwLayer(),
+      new DrwLayer(),
+      new DrwLayer(),
+      new DrwLayer(),
     ];
     this.setLayer(0);
+    this.setCanvasWidth(640);
   }
 
-  public saveState() {
-    return { ...this.state }; // Return a copy of the current tool state
-  }
-
-  public restoreState(state: ToolState) {
-    this.state = state;
+  public setCanvasWidth(width: number) {
+    const height = width / this.drw.header.aspectRatio;
+    this.width = width;
+    this.height = height;
+    this.canvas.width = width;
+    this.canvas.height = height;
+    this.layers.forEach(layer => {
+      layer.canvas.width = width;
+      layer.canvas.height = height;
+    });
   }
 
   // Composite all the painting layers into a single canvas
@@ -126,7 +123,7 @@ export class DrwRenderer {
   }
 
   public flip(x: boolean, y: boolean) {
-    this.layers.forEach(layer => {
+    this.layers.forEach(layer => { 
       layer.ctx.translate(this.width / 2, this.height / 2);
       layer.ctx.scale(x ? -1 : 1, y ? -1 : 1);
       layer.ctx.translate(-this.width / 2, -this.height / 2);
@@ -172,16 +169,18 @@ export class DrwRenderer {
     const { state } = this;
     const ctx = state.layerCtx;
     if (cmd.layer === null) {
-      ctx.globalAlpha = this.state.pressure;
-      if (this.state.brushControl === BrushControl.BRUSHCONTROL_ERASER) {
+      if (state.brushControl === BrushControl.BRUSHCONTROL_ERASER) {
         ctx.globalCompositeOperation = "destination-out";
       }
-      ctx.lineWidth = this.state.brushSize * this.width;
-      const [r, g, b] = this.state.color;
-      ctx.strokeStyle = '#' + ((r << 16) | (g << 8) | b).toString(16).padStart(6, '0');
+      ctx.globalAlpha = state.pressure;
+      ctx.lineWidth = state.brushRadius * 2;
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+      const [r, g, b] = state.color;
+      ctx.strokeStyle = `rgb(${r}, ${g}, ${b})`
       ctx.stroke();
-      ctx.globalAlpha = 1;
       ctx.globalCompositeOperation = "source-over";
+      ctx.globalAlpha = 1;
       this.state.isDrawing = false;
     } else {
       switch (cmd.layerAction) {
@@ -190,6 +189,7 @@ export class DrwRenderer {
           break;
         case LayerAction.LAYERACTION_SWAP:
           this.swapLayer(this.state.layer, cmd.layer);
+          this.setLayer(this.state.layer);
           break;
         case LayerAction.LAYERACTION_CLEAR:
           this.clearLayer(cmd.layer);
@@ -214,7 +214,7 @@ export class DrwRenderer {
   public handleSizeChange(cmd: SizeChangeCommand) {
     this.state.brushControl = cmd.brushControl;
     this.state.brushType = cmd.brushType;
-    this.state.brushSize = cmd.size;
+    this.state.brushRadius = cmd.size * this.width;
     this.state.opacity = cmd.opacity;
   }
 
