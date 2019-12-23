@@ -17,7 +17,7 @@ import {
 } from './DrwParser';
 
 interface ToolState {
-  layerCtx: CanvasRenderingContext2D,
+  activeLayerCtx: CanvasRenderingContext2D,
   isDrawing: boolean,
   color: Color,
   brushType: BrushType,
@@ -50,9 +50,10 @@ export class DrwRenderer {
   public height: number;
   public drw: DrwParser;
   public layers: DrwLayer[];
-  public tmp: DrwLayer;
-  public state: ToolState = {
-    layerCtx: null,
+
+  private tmpLayer: DrwLayer;
+  private state: ToolState = {
+    activeLayerCtx: null,
     isDrawing: false,
     color: [0, 0, 0],
     brushType: BrushType.BRUSHTYPE_HARD,
@@ -77,7 +78,7 @@ export class DrwRenderer {
       new DrwLayer(),
       new DrwLayer(),
     ];
-    this.tmp = new DrwLayer();
+    this.tmpLayer = new DrwLayer();
     this.setLayer(0);
   }
 
@@ -89,8 +90,8 @@ export class DrwRenderer {
       layer.canvas.width = width;
       layer.canvas.height = height;
     });
-    this.tmp.canvas.width = width;
-    this.tmp.canvas.height = height;
+    this.tmpLayer.canvas.width = width;
+    this.tmpLayer.canvas.height = height;
   }
 
   // Composite all the painting layers into a single canvas
@@ -103,75 +104,25 @@ export class DrwRenderer {
     }
   }
 
-  public setLayer(index: number) {
-    this.state.layer = index;
-    this.state.layerCtx = this.layers[index].ctx;
-  }
-
-  public moveLayer(srcIndex: number, dstIndex: number) {
-    const tmp = this.layers[srcIndex];
-    this.layers.splice(srcIndex, 1);
-    this.layers.splice(dstIndex, 0, tmp);
-  }
-
-  public copyLayer(srcIndex: number, dstIndex: number) {
-    const dstCtx = this.layers[dstIndex].ctx;
-    // If the src layer is underneath the dst layer in the layer stack, the src layer should be composited underneath the dst layer
-    // This can be done by setting the compositing operation
-    const isSrcLower = srcIndex > dstIndex; // (higher layer index value = lower layer)
-    if (isSrcLower) dstCtx.globalCompositeOperation = 'destination-over';
-    // Draw src to dst
-    dstCtx.drawImage(this.layers[srcIndex].canvas, 0, 0);
-    // Reset the compositing operation to default
-    if (isSrcLower) dstCtx.globalCompositeOperation = 'source-over';
-  }
-  
-  public clearLayer(index: number) {
-    this.layers[index].ctx.clearRect(0, 0, this.width, this.height);
-  }
-
-  public flip(flipX: boolean, flipY: boolean) {
-    const tmp = this.tmp;
-    const width = this.width;
-    const height = this.height;
-    const scaleX = flipX ? -1 : 1;
-    const scaleY = flipY ? -1 : 1;
-    // this is horribly slow but i can't think of a better way to implement it
-    this.layers.forEach(layer => {
-      // copy layer to tmp
-      tmp.ctx.clearRect(0, 0, width, height);
-      tmp.ctx.drawImage(layer.canvas, 0, 0);
-      // clear layer
-      layer.ctx.clearRect(0, 0, width, height);
-      // draw from tmp flipped
-      layer.ctx.scale(scaleX, scaleY);
-      layer.ctx.drawImage(tmp.canvas, flipX ? -width : 0, flipY ? -height : 0);
-      // cleanup
-      layer.ctx.scale(scaleX, scaleY);
-    });
-  }
-
   public handleCommand(cmdIndex: number) {
     const cmd = this.drw.getCommand(cmdIndex);
-    switch (cmd.type) {
-      case CommandType.TYPE_BRUSH:
-        this.handleDraw(cmd);
-        break;
-      case CommandType.TYPE_BRUSHEND:
-        this.handleDrawEnd(cmd);
-        break;
-      case CommandType.TYPE_COLORCHANGE:
-        this.handleColorChange(cmd);
-        break;
-      case CommandType.TYPE_SIZECHANGE:
-        this.handleSizeChange(cmd);
-        break;
+    if (cmd.type === CommandType.TYPE_BRUSH) {
+      this.handleDrawCommand(cmd);
+    } 
+    else if (cmd.type === CommandType.TYPE_BRUSHEND) {
+      this.handleDrawEndCommand(cmd);
+    }
+    else if (cmd.type === CommandType.TYPE_COLORCHANGE) {
+      this.handleColorChangeCommand(cmd);
+    }
+    else if (cmd.type === CommandType.TYPE_SIZECHANGE) {
+      this.handleSizeChangeCommand(cmd);
     }
   }
 
-  public handleDraw(cmd: BrushCommand) {
+  private handleDrawCommand(cmd: BrushCommand) {
     const { state } = this;
-    const ctx = state.layerCtx;
+    const ctx = state.activeLayerCtx;
     const x = cmd.x * this.width;
     const y = cmd.y * this.height;
     state.pressure = cmd.pressure;
@@ -186,9 +137,9 @@ export class DrwRenderer {
     state.y = y;
   }
 
-  public handleDrawEnd(cmd: BrushEndCommand) {
+  private handleDrawEndCommand(cmd: BrushEndCommand) {
     const { state } = this;
-    const ctx = state.layerCtx;
+    const ctx = state.activeLayerCtx;
     if (cmd.layer === null) {
       if (state.brushControl === BrushControl.BRUSHCONTROL_ERASER) {
         ctx.globalCompositeOperation = "destination-out";
@@ -204,41 +155,87 @@ export class DrwRenderer {
       ctx.globalAlpha = 1;
       state.isDrawing = false;
     } else {
-      switch (cmd.layerAction) {
-        case LayerAction.LAYERACTION_SET:
-          this.setLayer(cmd.layer);
-          break;
-        case LayerAction.LAYERACTION_NEWINDEX:
-          this.moveLayer(state.layer, cmd.layer);
-          this.setLayer(state.layer);
-          break;
-        case LayerAction.LAYERACTION_CLEAR:
-          this.clearLayer(cmd.layer);
-          break;
-        case LayerAction.LAYERACTION_COPY:
-          this.copyLayer(state.layer, cmd.layer);
-          break;
+      if (cmd.layerAction === LayerAction.LAYERACTION_SET) {
+        this.setLayer(cmd.layer);
+      }
+      else if (cmd.layerAction === LayerAction.LAYERACTION_NEWINDEX) {
+        this.moveLayer(state.layer, cmd.layer);
+        this.setLayer(state.layer);
+      }
+      else if (cmd.layerAction === LayerAction.LAYERACTION_CLEAR) {
+        this.clearLayer(cmd.layer);
+      }
+      else if (cmd.layerAction === LayerAction.LAYERACTION_COPY) {
+        this.copyLayer(state.layer, cmd.layer);
       }
     }
-    
   }
 
-  public handleColorChange(cmd: ColorChangeCommand) {
+  private handleColorChangeCommand(cmd: ColorChangeCommand) {
     if (cmd.color !== null) {
       this.state.color = cmd.color;
+    } 
+    else {
+      if (cmd.flipX || cmd.flipY) {
+        this.flip(cmd.flipX, cmd.flipY);
+      }
+      this.state.flipX = cmd.flipX;
+      this.state.flipY = cmd.flipY;
+      this.state.user = cmd.user;
     }
-    if (cmd.flipX || cmd.flipY) {
-      this.flip(cmd.flipX, cmd.flipY);
-    }
-    this.state.flipX = cmd.flipX;
-    this.state.flipY = cmd.flipY;
   }
 
-  public handleSizeChange(cmd: SizeChangeCommand) {
+  private handleSizeChangeCommand(cmd: SizeChangeCommand) {
     this.state.brushControl = cmd.brushControl;
     this.state.brushType = cmd.brushType;
     this.state.brushRadius = cmd.size * this.width;
     this.state.opacity = cmd.opacity;
   }
 
+  private setLayer(index: number) {
+    this.state.layer = index;
+    this.state.activeLayerCtx = this.layers[index].ctx;
+  }
+
+  private moveLayer(srcIndex: number, dstIndex: number) {
+    const srcLayer = this.layers.splice(srcIndex, 1)[0];
+    this.layers.splice(dstIndex, 0, srcLayer);
+  }
+
+  private copyLayer(srcIndex: number, dstIndex: number) {
+    const dstCtx = this.layers[dstIndex].ctx;
+    // If the src layer is underneath the dst layer in the layer stack, the src layer should be composited underneath the dst layer
+    // This can be done by setting the compositing operation
+    const isSrcLower = srcIndex > dstIndex; // (higher layer index value = lower layer)
+    if (isSrcLower) dstCtx.globalCompositeOperation = 'destination-over';
+    // Draw src to dst
+    dstCtx.drawImage(this.layers[srcIndex].canvas, 0, 0);
+    // Reset the compositing operation to default
+    if (isSrcLower) dstCtx.globalCompositeOperation = 'source-over';
+  }
+  
+  private clearLayer(index: number) {
+    this.layers[index].ctx.clearRect(0, 0, this.width, this.height);
+  }
+
+  private flip(flipX: boolean, flipY: boolean) {
+    const tmp = this.tmpLayer;
+    const width = this.width;
+    const height = this.height;
+    const scaleX = flipX ? -1 : 1;
+    const scaleY = flipY ? -1 : 1;
+    // Maybe manually flipping the pixel data would be better?
+    this.layers.forEach(layer => {
+      // Copy layer to tmp canvas
+      tmp.ctx.clearRect(0, 0, width, height);
+      tmp.ctx.drawImage(layer.canvas, 0, 0);
+      // clear layer
+      layer.ctx.clearRect(0, 0, width, height);
+      // draw from tmp flipped
+      layer.ctx.scale(scaleX, scaleY);
+      layer.ctx.drawImage(tmp.canvas, flipX ? -width : 0, flipY ? -height : 0);
+      // cleanup
+      layer.ctx.scale(scaleX, scaleY);
+    });
+  }
 }
