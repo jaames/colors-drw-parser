@@ -92,7 +92,7 @@ export enum BrushType {
 
 export enum LayerAction {
   LAYERACTION_SET = 0,
-  LAYERACTION_SWAP = 1,
+  LAYERACTION_NEWINDEX = 1,
   LAYERACTION_CLEAR = 2,
   LAYERACTION_COPY = 3,
 };
@@ -114,7 +114,7 @@ export class DrwParser {
   // Fetch a drw from a url
   // These can be fetched from the colorslive s3 bucket:
   // https://s3.amazonaws.com/colorslive/drw/< painting id >-< some base64 string? >.drw
-  static async loadfromUrl(url: string): Promise<DrwParser> {
+  static async loadFromUrl(url: string): Promise<DrwParser> {
     return fetch(url)
       .then(response => response.arrayBuffer())
       .then(data => new DrwParser(data));
@@ -166,8 +166,9 @@ export class DrwParser {
           y: (y - 512) / 1024,
         };
       case CommandType.TYPE_BRUSHEND:
+        // 1 unused bit
         const layer =       (cmd >> 3) & 0xFF;
-        const layerAction = (cmd >> (11)) & 0x3; // wasn't present in the docs provided by Jens, might be wrong
+        const layerAction = (cmd >> 11) & 0x3;
         return {
           type: CommandType.TYPE_BRUSHEND,
           layer: layer > 0 ? ( layer - 1) : null,
