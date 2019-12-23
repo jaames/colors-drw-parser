@@ -29,6 +29,8 @@ interface ToolState {
   pressure: number,
   x: number,
   y: number,
+  flipX: boolean,
+  flipY: boolean,
 };
 
 class DrwLayer {
@@ -47,6 +49,7 @@ export class DrwRenderer {
   public height: number;
   public drw: DrwParser;
   public layers: DrwLayer[];
+  public tmp: DrwLayer;
   public canvas: HTMLCanvasElement;
   public ctx: CanvasRenderingContext2D;
   public state: ToolState = {
@@ -61,7 +64,9 @@ export class DrwRenderer {
     user: 0,
     layer: 0,
     x: 0,
-    y: 0
+    y: 0,
+    flipX: false,
+    flipY: false
   };
   
   constructor(canvas: HTMLCanvasElement, drw: DrwParser) {
@@ -77,6 +82,7 @@ export class DrwRenderer {
       new DrwLayer(),
       new DrwLayer(),
     ];
+    this.tmp = new DrwLayer();
     this.setLayer(0);
     this.setCanvasWidth(640);
   }
@@ -91,6 +97,8 @@ export class DrwRenderer {
       layer.canvas.width = width;
       layer.canvas.height = height;
     });
+    this.tmp.canvas.width = width;
+    this.tmp.canvas.height = height;
   }
 
   // Composite all the painting layers into a single canvas
@@ -114,7 +122,6 @@ export class DrwRenderer {
   }
 
   public copyLayer(srcIndex: number, dstIndex: number) {
-    // not sure if this is actually correct?
     this.layers[dstIndex].ctx.drawImage(this.layers[srcIndex].canvas, 0, 0);
   }
   
@@ -122,11 +129,24 @@ export class DrwRenderer {
     this.layers[index].ctx.clearRect(0, 0, this.width, this.height);
   }
 
-  public flip(x: boolean, y: boolean) {
-    this.layers.forEach(layer => { 
-      layer.ctx.translate(this.width / 2, this.height / 2);
-      layer.ctx.scale(x ? -1 : 1, y ? -1 : 1);
-      layer.ctx.translate(-this.width / 2, -this.height / 2);
+  public flip(flipX: boolean, flipY: boolean) {
+    const tmp = this.tmp;
+    const width = this.width;
+    const height = this.height;
+    const scaleX = flipX ? -1 : 1;
+    const scaleY = flipY ? -1 : 1;
+    // this is horribly slow but i can't think of a better way to implement it
+    this.layers.forEach(layer => {
+      // copy layer to tmp
+      tmp.ctx.clearRect(0, 0, width, height);
+      tmp.ctx.drawImage(layer.canvas, 0, 0);
+      // clear layer
+      layer.ctx.clearRect(0, 0, width, height);
+      // draw from tmp flipped
+      layer.ctx.scale(scaleX, scaleY);
+      layer.ctx.drawImage(tmp.canvas, flipX ? -width : 0, flipY ? -height : 0);
+      // cleanup
+      layer.ctx.scale(scaleX, scaleY);
     });
   }
 
@@ -172,7 +192,7 @@ export class DrwRenderer {
       if (state.brushControl === BrushControl.BRUSHCONTROL_ERASER) {
         ctx.globalCompositeOperation = "destination-out";
       }
-      ctx.globalAlpha = state.pressure;
+      ctx.globalAlpha = state.pressure * state.opacity;
       ctx.lineWidth = state.brushRadius * 2;
       ctx.lineCap = 'round';
       ctx.lineJoin = 'round';
@@ -209,6 +229,8 @@ export class DrwRenderer {
     if (cmd.flipX || cmd.flipY) {
       this.flip(cmd.flipX, cmd.flipY);
     }
+    this.state.flipX = cmd.flipX;
+    this.state.flipY = cmd.flipY;
   }
 
   public handleSizeChange(cmd: SizeChangeCommand) {
