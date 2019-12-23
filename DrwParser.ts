@@ -47,8 +47,8 @@ export const enum CommandType {
 export interface BrushCommand {
   type: CommandType.TYPE_BRUSH;
   pressure: number;
-  x: number,
-  y: number,
+  x: number;
+  y: number;
 };
 
 export interface BrushEndCommand {
@@ -59,10 +59,10 @@ export interface BrushEndCommand {
 
 export interface ColorChangeCommand {
   type: CommandType.TYPE_COLORCHANGE;
-  color: Color,
-  user: number,
-  flipX: boolean,
-  flipY: boolean
+  color: Color;
+  user: number;
+  flipX: boolean;
+  flipY: boolean;
 };
 
 export interface SizeChangeCommand {
