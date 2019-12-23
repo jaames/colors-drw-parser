@@ -108,11 +108,10 @@ export class DrwRenderer {
     this.state.layerCtx = this.layers[index].ctx;
   }
 
-  public swapLayer(srcIndex: number, dstIndex: number) {
-    // TODO: this is wrong, looks like it just moves one layer and reshuffles the rest
+  public moveLayer(srcIndex: number, dstIndex: number) {
     const tmp = this.layers[srcIndex];
-    this.layers[srcIndex] = this.layers[dstIndex];
-    this.layers[dstIndex] = tmp;
+    this.layers.splice(srcIndex, 1);
+    this.layers.splice(dstIndex, 0, tmp);
   }
 
   public copyLayer(srcIndex: number, dstIndex: number) {
@@ -203,21 +202,21 @@ export class DrwRenderer {
       ctx.stroke();
       ctx.globalCompositeOperation = "source-over";
       ctx.globalAlpha = 1;
-      this.state.isDrawing = false;
+      state.isDrawing = false;
     } else {
       switch (cmd.layerAction) {
         case LayerAction.LAYERACTION_SET:
           this.setLayer(cmd.layer);
           break;
-        case LayerAction.LAYERACTION_SWAP:
-          this.swapLayer(this.state.layer, cmd.layer);
-          this.setLayer(this.state.layer);
+        case LayerAction.LAYERACTION_NEWINDEX:
+          this.moveLayer(state.layer, cmd.layer);
+          this.setLayer(state.layer);
           break;
         case LayerAction.LAYERACTION_CLEAR:
           this.clearLayer(cmd.layer);
           break;
         case LayerAction.LAYERACTION_COPY:
-          this.copyLayer(this.state.layer, cmd.layer);
+          this.copyLayer(state.layer, cmd.layer);
           break;
       }
     }
