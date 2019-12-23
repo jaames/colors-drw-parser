@@ -16,6 +16,8 @@ import {
   DrwParser,
 } from './DrwParser';
 
+type Vec2 = [number, number];
+
 interface ToolState {
   activeLayerCtx: CanvasRenderingContext2D;
   layer: number;
@@ -52,6 +54,7 @@ export class DrwRenderer {
   public layers: DrwLayer[];
 
   private tmpLayer: DrwLayer;
+  private brushPoints: Vec2[] = [];
   private state: ToolState = {
     activeLayerCtx: null,
     layer: 0,
@@ -126,38 +129,21 @@ export class DrwRenderer {
 
   private handleDrawCommand(cmd: BrushCommand) {
     const { state } = this;
-    const ctx = state.activeLayerCtx;
     const x = cmd.x * this.width;
     const y = cmd.y * this.height;
+    this.brushPoints.push([x, y]);
     state.pressure = cmd.pressure;
-    if (!state.isDrawing) {
-      // ctx.beginPath();
-      // ctx.moveTo(x, y);
-      state.isDrawing = true;
-    } else {
-      this.brushStroke(state.x, state.y, x, y);
-      ctx.lineTo(x, y);
-    }
     state.x = x;
     state.y = y;
+    if (!state.isDrawing) {
+      state.isDrawing = true;
+    } 
   }
 
   private handleDrawEndCommand(cmd: BrushEndCommand) {
     const { state } = this;
-    const ctx = state.activeLayerCtx;
     if (cmd.layer === null) {
-      // if (state.brushControl === BrushControl.BRUSHCONTROL_ERASER) {
-      //   ctx.globalCompositeOperation = "destination-out";
-      // }
-      // ctx.globalAlpha = state.pressure * state.opacity;
-      // ctx.lineWidth = state.brushRadius * 2;
-      // ctx.lineCap = 'round';
-      // ctx.lineJoin = 'round';
-      // const [r, g, b] = state.color;
-      // ctx.strokeStyle = `rgb(${r}, ${g}, ${b})`
-      // ctx.stroke();
-      // ctx.globalCompositeOperation = "source-over";
-      // ctx.globalAlpha = 1;
+      this.brushStroke();
       state.isDrawing = false;
     } else {
       if (cmd.layerAction === LayerAction.LAYERACTION_SET) {
@@ -203,67 +189,79 @@ export class DrwRenderer {
     const state = this.state;
     const ctx = this.brushCtx;
     const [r, g, b] = state.color;
+    const rgb = `${r}, ${g}, ${b}`;
     const brushType = state.brushType;
-    const radius = state.brushRadius;
-    const size = Math.max(state.brushRadius * 2, 1); // canvas can't be smaller than 1px
+    const size = Math.max(Math.ceil(state.brushRadius) * 2, 1); // canvas can't be smaller than 1px
+    const radius = size / 2;
     const cX = radius;
     const cY = radius;
-    // setting canvas width/height also clears it
     this.brushCanvas.width = size;
     this.brushCanvas.height = size;
+    ctx.clearRect(0, 0, size, size);
     // create brush
-    const alpha = state.pressure * state.opacity;
     if (brushType === BrushType.BRUSHTYPE_HARD) {
       const grad = ctx.createRadialGradient(cX, cY, 0, cX, cY, radius);
-      grad.addColorStop(0,    `rgba(${r}, ${g}, ${b}, ${.5 * alpha})`);
-      grad.addColorStop(0.95, `rgba(${r}, ${g}, ${b}, ${.5 * alpha })`);
-      grad.addColorStop(1,    `rgba(${r}, ${g}, ${b}, 0)`);
-      ctx.fillStyle = grad;
+      grad.addColorStop(.9, `rgba(${rgb}, 1)`);
+      grad.addColorStop(1,  `rgba(${rgb}, 0)`);
+      ctx.fillStyle = grad
       ctx.fillRect(0, 0, size, size);
     }
     else if (brushType === BrushType.BRUSHTYPE_SOFT) {
       const grad = ctx.createRadialGradient(cX, cY, 0, cX, cY, radius);
-      grad.addColorStop(0, `  rgba(${r}, ${g}, ${b}, ${.5 * alpha})`);
-      grad.addColorStop(0.5, `rgba(${r}, ${g}, ${b}, ${.25 * alpha})`);
-      grad.addColorStop(1,    `rgba(${r}, ${g}, ${b}, 0)`);
+      grad.addColorStop(0,  `rgba(${rgb}, .1)`);
+      grad.addColorStop(.9, `rgba(${rgb}, 0)`);
       ctx.fillStyle = grad;
       ctx.fillRect(0, 0, size, size);
     }
     else if (brushType === BrushType.BRUSHTYPE_BRISTLE) {
       const grad = ctx.createRadialGradient(cX, cY, 0, cX, cY, radius);
-      grad.addColorStop(0,    `rgba(${r}, ${g}, ${b}, ${.1 * alpha})`);
-      grad.addColorStop(0.95, `rgba(${r}, ${g}, ${b}, ${.1 * alpha})`);
-      grad.addColorStop(1,    `rgba(${r}, ${g}, ${b}, 0)`);
+      grad.addColorStop(.9,  `rgba(${rgb}, 1`);
+      grad.addColorStop(.95, `rgba(${rgb}, 0`);
       ctx.fillStyle = grad;
-      ctx.fillRect(0, 0, size, size);
+      for (let i = 0; i < 50; i++) {
+        ctx.fillRect(size * Math.random(), size * Math.random(), size * 0.06, size * 0.06);
+      }
     }
-    // ctx.globalAlpha = 1;
   }
 
-  private brushStroke(x0: number, y0: number, x1: number, y1: number) {
+  private brushStroke() {
     const state = this.state;
-    const ctx = state.activeLayerCtx;
-    const brushRadius = state.brushRadius;
+    const ctx = this.tmpLayer.ctx;
+    const brushRadius = Math.ceil(state.brushRadius);
+    ctx.clearRect(0, 0, this.width, this.height);
+    if (this.brushPoints.length === 1){
+      const [x, y] = this.brushPoints[0];
+      ctx.drawImage(this.brushCanvas, x, y, brushRadius * 2, brushRadius * 2);
+    }
+    else {
+      // For each stroke segment
+      for (let i = 1; i < this.brushPoints.length - 1; i++) {
+        const [x0, y0] = this.brushPoints[i - 1];
+        const [x1, y1] = this.brushPoints[i];
+        // Stamp brush allong stroke segment
+        const strokeDist = Math.sqrt(Math.pow(x1 - x0, 2) + Math.pow(y1 - y0, 2));
+        const strokeAngle = Math.atan2(x1 - x0, y1 - y0);
+        const dX = Math.sin(strokeAngle);
+        const dY = Math.cos(strokeAngle);
+        for (let step = 0; step < strokeDist; step += 1) {
+          const x = x0 + dX * step;
+          const y = y0 + dY * step;
+          ctx.drawImage(this.brushCanvas, x - brushRadius, y - brushRadius, brushRadius * 2, brushRadius * 2);
+        }
+      }
+    }
+    this.brushPoints = [];
     // Set up canvas compositor mode
     if (state.brushControl === BrushControl.BRUSHCONTROL_ERASER) {
-      ctx.globalCompositeOperation = "destination-out";
+      state.activeLayerCtx.globalCompositeOperation = "destination-out";
     }
-    ctx.globalAlpha = state.pressure * state.opacity;
-    // Stamp brush allong stroke
-    const strokeDist = Math.sqrt(Math.pow(x1 - x0, 2) + Math.pow(y1 - y0, 2));
-    const strokeAngle = Math.atan2(x1 - x0, y1 - y0);
-    const dX = Math.sin(strokeAngle);
-    const dY = Math.cos(strokeAngle);
-    for (let step = 0; step < strokeDist; step += 1) {
-      const x = x0 + dX * step;
-      const y = y0 + dY * step;
-      ctx.drawImage(this.brushCanvas, x - brushRadius, y - brushRadius, brushRadius * 2, brushRadius * 2);
-    }
+    state.activeLayerCtx.globalAlpha = state.pressure * state.opacity;
+    state.activeLayerCtx.drawImage(this.tmpLayer.canvas, 0, 0);
     // Reset canvas compositor mode to defaults
     if (state.brushControl === BrushControl.BRUSHCONTROL_ERASER) {
-      ctx.globalCompositeOperation = "source-over";
+      state.activeLayerCtx.globalCompositeOperation = "source-over";
     }
-    ctx.globalAlpha = 1;
+    state.activeLayerCtx.globalAlpha = 1;
   }
 
   private setLayer(index: number) {
