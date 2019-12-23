@@ -36,6 +36,7 @@ interface ToolState {
 class DrwLayer {
   public canvas: HTMLCanvasElement;
   public ctx: CanvasRenderingContext2D;
+  public isVisible: boolean = true;
 
   constructor () {
     this.canvas = document.createElement('canvas');
@@ -50,8 +51,6 @@ export class DrwRenderer {
   public drw: DrwParser;
   public layers: DrwLayer[];
   public tmp: DrwLayer;
-  public canvas: HTMLCanvasElement;
-  public ctx: CanvasRenderingContext2D;
   public state: ToolState = {
     layerCtx: null,
     isDrawing: false,
@@ -69,12 +68,8 @@ export class DrwRenderer {
     flipY: false
   };
   
-  constructor(canvas: HTMLCanvasElement, drw: DrwParser) {
+  constructor(drw: DrwParser) {
     this.drw = drw;
-    this.canvas = canvas
-    this.ctx = this.canvas.getContext('2d');
-    this.canvas.width = this.width;
-    this.canvas.height = this.height;
     this.layers = [
       new DrwLayer(),
       new DrwLayer(),
@@ -84,15 +79,12 @@ export class DrwRenderer {
     ];
     this.tmp = new DrwLayer();
     this.setLayer(0);
-    this.setCanvasWidth(640);
   }
 
   public setCanvasWidth(width: number) {
     const height = width / this.drw.header.aspectRatio;
     this.width = width;
     this.height = height;
-    this.canvas.width = width;
-    this.canvas.height = height;
     this.layers.forEach(layer => {
       layer.canvas.width = width;
       layer.canvas.height = height;
@@ -103,10 +95,11 @@ export class DrwRenderer {
 
   // Composite all the painting layers into a single canvas
   // Only needs to be done to produce a final image
-  public composite() {
-    this.ctx.clearRect(0, 0, this.width, this.height);
+  public blitTo(ctx: CanvasRenderingContext2D) {
+    ctx.clearRect(0, 0, this.width, this.height);
     for (let layerIndex = 4; layerIndex >= 0; layerIndex --) {
-      this.ctx.drawImage(this.layers[layerIndex].canvas, 0, 0);
+      const layer = this.layers[layerIndex];
+      if (layer.isVisible) ctx.drawImage(this.layers[layerIndex].canvas, 0, 0);
     }
   }
 
@@ -116,13 +109,22 @@ export class DrwRenderer {
   }
 
   public swapLayer(srcIndex: number, dstIndex: number) {
+    // TODO: this is wrong, looks like it just moves one layer and reshuffles the rest
     const tmp = this.layers[srcIndex];
     this.layers[srcIndex] = this.layers[dstIndex];
     this.layers[dstIndex] = tmp;
   }
 
   public copyLayer(srcIndex: number, dstIndex: number) {
-    this.layers[dstIndex].ctx.drawImage(this.layers[srcIndex].canvas, 0, 0);
+    const dstCtx = this.layers[dstIndex].ctx;
+    // If the src layer is underneath the dst layer in the layer stack, the src layer should be composited underneath the dst layer
+    // This can be done by setting the compositing operation
+    const isSrcLower = srcIndex > dstIndex; // (higher layer index value = lower layer)
+    if (isSrcLower) dstCtx.globalCompositeOperation = 'destination-over';
+    // Draw src to dst
+    dstCtx.drawImage(this.layers[srcIndex].canvas, 0, 0);
+    // Reset the compositing operation to default
+    if (isSrcLower) dstCtx.globalCompositeOperation = 'source-over';
   }
   
   public clearLayer(index: number) {
