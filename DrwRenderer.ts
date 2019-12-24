@@ -26,6 +26,7 @@ interface ToolState {
   activeLayerCtx: CanvasRenderingContext2D;
   layer: number;
   color: Color;
+  brushPoints: Vec2[],
   brushType: BrushType;
   brushControl: BrushControl;
   brushRadius: number;
@@ -63,11 +64,11 @@ export class DrwRenderer {
   private brushCanvas: HTMLCanvasElement;
   private brushCtx: CanvasRenderingContext2D;
 
-  private brushPoints: Vec2[] = [];
   private state: ToolState = {
     activeLayerCtx: null,
     layer: 0,
     color: [0, 0, 0],
+    brushPoints: [],
     brushType: BrushType.BRUSHTYPE_HARD,
     brushControl: BrushControl.BRUSHCONTROL_VARIABLEOPACITY,
     brushRadius: 20,
@@ -162,7 +163,7 @@ export class DrwRenderer {
     const { state } = this;
     const x = cmd.x * this.width;
     const y = cmd.y * this.height;
-    this.brushPoints.push([x, y]);
+    state.brushPoints.push([x, y]);
     state.pressure = cmd.pressure;
     state.x = x;
     state.y = y;
@@ -192,25 +193,27 @@ export class DrwRenderer {
   }
 
   private handleColorChangeCommand(cmd: ColorChangeCommand) {
+    const state = this.state;
     if (cmd.color !== null) {
-      this.state.color = cmd.color;
+      state.color = cmd.color;
       this.updateBrush();
     } 
     else {
       if (cmd.flipX || cmd.flipY) {
         this.flip(cmd.flipX, cmd.flipY);
       }
-      this.state.flipX = cmd.flipX;
-      this.state.flipY = cmd.flipY;
-      this.state.user = cmd.user;
+      state.flipX = cmd.flipX;
+      state.flipY = cmd.flipY;
+      state.user = cmd.user;
     }
   }
 
   private handleSizeChangeCommand(cmd: SizeChangeCommand) {
-    this.state.brushControl = cmd.brushControl;
-    this.state.brushType = cmd.brushType;
-    this.state.brushRadius = cmd.size * this.width;
-    this.state.opacity = cmd.opacity;
+    const state = this.state;
+    state.brushControl = cmd.brushControl;
+    state.brushType = cmd.brushType;
+    state.brushRadius = cmd.size * this.width;
+    state.opacity = cmd.opacity;
     this.updateBrush();
   }
 
@@ -220,20 +223,21 @@ export class DrwRenderer {
     const [r, g, b] = state.color;
     const brushRadius = state.brushRadius;
     const brushSize = Math.max(brushRadius * 2, 1);
-    const brushTexture = this.brushTextures[state.brushType];
-    // setting canvas size also clears it
+    const brushTexture = state.brushControl !== BrushControl.BRUSHCONTROL_ERASER ? this.brushTextures[state.brushType] : this.brushTextures[0];
+    // Setting canvas size also clears it
     this.brushCanvas.width = brushSize;
     this.brushCanvas.height = brushSize;
     ctx.drawImage(brushTexture, 0, 0, brushSize, brushSize);
-    // Apply color to the entire brush stroke
+    // Apply color
     ctx.globalCompositeOperation = 'source-in';
     ctx.fillStyle = `rgb(${r}, ${g}, ${b})`;
-    ctx.fillRect(0, 0, this.width, this.height);
+    ctx.fillRect(0, 0, brushSize, brushSize);
     ctx.globalCompositeOperation = 'source-over';
   }
 
   private brushStroke() {
     const state = this.state;
+    const brushPoints = state.brushPoints;
     const brushRadius = state.brushRadius;
     const brushTexture = this.brushCanvas;
 
@@ -243,17 +247,17 @@ export class DrwRenderer {
     const ctx = this.tmpLayer.ctx;
     ctx.clearRect(0, 0, this.width, this.height);
 
-    // If there's only one set of coords, use a single brush stamp
-    if (this.brushPoints.length === 1) {
-      const [x, y] = this.brushPoints[0];
+    // If there's only one set of brush coords, use a single brush stamp
+    if (brushPoints.length === 1) {
+      const [x, y] = brushPoints[0];
       ctx.drawImage(brushTexture, x - brushRadius, y - brushRadius);
     }
     // Otherwise connect points with lines of brush stamps
-    else if ((this.brushPoints.length > 1) && (brushRadius > 4)) {
+    else if ((brushPoints.length > 1) && (brushRadius > 4)) {
       // For each stroke segment
-      for (let i = 1; i < this.brushPoints.length - 1; i++) {
-        const [x0, y0] = this.brushPoints[i - 1];
-        const [x1, y1] = this.brushPoints[i];
+      for (let i = 1; i < brushPoints.length - 1; i++) {
+        const [x0, y0] = brushPoints[i - 1];
+        const [x1, y1] = brushPoints[i];
         // Stamp brush allong stroke segment
         const strokeDist = Math.sqrt(Math.pow(x1 - x0, 2) + Math.pow(y1 - y0, 2));
         const strokeAngle = Math.atan2(x1 - x0, y1 - y0);
@@ -267,22 +271,22 @@ export class DrwRenderer {
       }
     }
     // Stamping doesn't work so well for small brush sizes
-    else if ((this.brushPoints.length > 1)) {
+    else if (brushPoints.length > 1) {
       const [r, g, b] = state.color;
       ctx.strokeStyle = `rgb(${r}, ${g}, ${b})`;
       ctx.lineWidth = brushRadius * 2;
       ctx.lineCap = 'round';
       ctx.lineJoin = 'round';
       ctx.beginPath();
-      ctx.moveTo(this.brushPoints[0][0], this.brushPoints[0][1]);
-      for (let i = 1; i < this.brushPoints.length - 1; i++) {
-        ctx.lineTo(this.brushPoints[i][0], this.brushPoints[i][1]);
+      ctx.moveTo(brushPoints[0][0], brushPoints[0][1]);
+      for (let i = 1; i < brushPoints.length - 1; i++) {
+        ctx.lineTo(brushPoints[i][0], brushPoints[i][1]);
       }
       ctx.stroke();
     }
     // Clear stroke segments
-    this.brushPoints = [];
-    // Composite tmp layer to active layer
+    state.brushPoints = [];
+    // Next step is to composite tmp brush layer to the active painting layer
     // Eraser: removes from layer 
     if (state.brushControl === BrushControl.BRUSHCONTROL_ERASER) {
       state.activeLayerCtx.globalCompositeOperation = 'destination-out';
