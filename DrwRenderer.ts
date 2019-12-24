@@ -16,6 +16,10 @@ import {
   DrwParser,
 } from './DrwParser';
 
+import brushHardTex from './brushtextures/brush_hard.png';
+import brushSoftTex from './brushtextures/brush_soft.png';
+import brushBristleTex from './brushtextures/brush_bristle.png';
+
 type Vec2 = [number, number];
 
 interface ToolState {
@@ -54,6 +58,11 @@ export class DrwRenderer {
   public layers: DrwLayer[];
 
   private tmpLayer: DrwLayer;
+
+  private brushTextures: HTMLImageElement[];
+  private brushCanvas: HTMLCanvasElement;
+  private brushCtx: CanvasRenderingContext2D;
+
   private brushPoints: Vec2[] = [];
   private state: ToolState = {
     activeLayerCtx: null,
@@ -71,8 +80,6 @@ export class DrwRenderer {
     flipY: false,
     user: 0,
   };
-  private brushCanvas: HTMLCanvasElement;
-  private brushCtx: CanvasRenderingContext2D;
   
   constructor(drw: DrwParser) {
     this.drw = drw;
@@ -87,6 +94,30 @@ export class DrwRenderer {
     this.setLayer(0);
     this.brushCanvas = document.createElement('canvas');
     this.brushCtx = this.brushCanvas.getContext('2d');
+  }
+  
+  // Fetch an image (for texture loading)
+  private async fetchImage(src: string): Promise<HTMLImageElement> {
+    return new Promise((resolve, reject) => {
+      const image = new Image();
+      image.onload = () => resolve(image);
+      image.onerror = () => reject();
+      image.src = src; 
+    });
+  }
+
+  // Load all the brush textures
+  public async prepare() {
+    return Promise.all([
+      this.fetchImage(brushHardTex),
+      this.fetchImage(brushSoftTex),
+      this.fetchImage(brushBristleTex),
+    ])
+    .then((brushTextures) => {
+      this.brushTextures = brushTextures;
+      this.updateBrush();
+      return this; // return renderer instance
+    })
   }
 
   public setCanvasWidth(width: number) {
@@ -105,7 +136,7 @@ export class DrwRenderer {
   // Only needs to be done to produce a final image
   public blitTo(ctx: CanvasRenderingContext2D) {
     ctx.clearRect(0, 0, this.width, this.height);
-    for (let layerIndex = 4; layerIndex >= 0; layerIndex --) {
+    for (let layerIndex = 4; layerIndex >= 0; layerIndex--) {
       const layer = this.layers[layerIndex];
       if (layer.isVisible) ctx.drawImage(this.layers[layerIndex].canvas, 0, 0);
     }
@@ -135,9 +166,7 @@ export class DrwRenderer {
     state.pressure = cmd.pressure;
     state.x = x;
     state.y = y;
-    if (!state.isDrawing) {
-      state.isDrawing = true;
-    } 
+    state.isDrawing = true;
   }
 
   private handleDrawEndCommand(cmd: BrushEndCommand) {
@@ -189,50 +218,38 @@ export class DrwRenderer {
     const state = this.state;
     const ctx = this.brushCtx;
     const [r, g, b] = state.color;
-    const rgb = `${r}, ${g}, ${b}`;
-    const brushType = state.brushType;
-    const size = Math.max(Math.ceil(state.brushRadius) * 2, 1); // canvas can't be smaller than 1px
-    const radius = size / 2;
-    const cX = radius;
-    const cY = radius;
-    this.brushCanvas.width = size;
-    this.brushCanvas.height = size;
-    ctx.clearRect(0, 0, size, size);
-    // create brush
-    if (brushType === BrushType.BRUSHTYPE_HARD) {
-      const grad = ctx.createRadialGradient(cX, cY, 0, cX, cY, radius);
-      grad.addColorStop(.9, `rgba(${rgb}, 1)`);
-      grad.addColorStop(1,  `rgba(${rgb}, 0)`);
-      ctx.fillStyle = grad
-      ctx.fillRect(0, 0, size, size);
-    }
-    else if (brushType === BrushType.BRUSHTYPE_SOFT) {
-      const grad = ctx.createRadialGradient(cX, cY, 0, cX, cY, radius);
-      grad.addColorStop(0,  `rgba(${rgb}, .1)`);
-      grad.addColorStop(.9, `rgba(${rgb}, 0)`);
-      ctx.fillStyle = grad;
-      ctx.fillRect(0, 0, size, size);
-    }
-    else if (brushType === BrushType.BRUSHTYPE_BRISTLE) {
-      const grad = ctx.createRadialGradient(cX, cY, 0, cX, cY, radius);
-      grad.addColorStop(.9,  `rgba(${rgb}, 1`);
-      grad.addColorStop(.95, `rgba(${rgb}, 0`);
-      ctx.fillStyle = grad;
-      for (let i = 0; i < 50; i++) {
-        ctx.fillRect(size * Math.random(), size * Math.random(), size * 0.06, size * 0.06);
-      }
-    }
+    const brushRadius = state.brushRadius;
+    const brushSize = Math.max(brushRadius * 2, 1);
+    const brushTexture = this.brushTextures[state.brushType];
+    // setting canvas size also clears it
+    this.brushCanvas.width = brushSize;
+    this.brushCanvas.height = brushSize;
+    ctx.drawImage(brushTexture, 0, 0, brushSize, brushSize);
+    // Apply color to the entire brush stroke
+    ctx.globalCompositeOperation = 'source-in';
+    ctx.fillStyle = `rgb(${r}, ${g}, ${b})`;
+    ctx.fillRect(0, 0, this.width, this.height);
+    ctx.globalCompositeOperation = 'source-over';
   }
 
   private brushStroke() {
     const state = this.state;
+    const brushRadius = state.brushRadius;
+    const brushSize = brushRadius * 2;
+    const brushTexture = this.brushCanvas;
+
+    // Draw stroke to tmp layer
+    // The stroke is drawn with no opacity, then composited onto the actual layer later
+    // This is the only way to ensure consistent opacity across the stroke, accurate to the way Colors draws them
     const ctx = this.tmpLayer.ctx;
-    const brushRadius = Math.ceil(state.brushRadius);
     ctx.clearRect(0, 0, this.width, this.height);
-    if (this.brushPoints.length === 1){
+
+    // If there's only one set of coords, use a single brush stamp
+    if (this.brushPoints.length === 1) {
       const [x, y] = this.brushPoints[0];
-      ctx.drawImage(this.brushCanvas, x, y, brushRadius * 2, brushRadius * 2);
+      ctx.drawImage(brushTexture, x - brushRadius, y - brushRadius);
     }
+    // Otherwise connect points with lines of brush stamps
     else {
       // For each stroke segment
       for (let i = 1; i < this.brushPoints.length - 1; i++) {
@@ -246,22 +263,28 @@ export class DrwRenderer {
         for (let step = 0; step < strokeDist; step += 1) {
           const x = x0 + dX * step;
           const y = y0 + dY * step;
-          ctx.drawImage(this.brushCanvas, x - brushRadius, y - brushRadius, brushRadius * 2, brushRadius * 2);
+          ctx.drawImage(brushTexture, x - brushRadius, y - brushRadius);
         }
       }
     }
+    // Clear stroke segments
     this.brushPoints = [];
-    // Set up canvas compositor mode
+    // Composite tmp layer to active layer
+    // Eraser: removes from layer 
     if (state.brushControl === BrushControl.BRUSHCONTROL_ERASER) {
-      state.activeLayerCtx.globalCompositeOperation = "destination-out";
+      state.activeLayerCtx.globalCompositeOperation = 'destination-out';
+      // TODO: not sure if this is 100% correct, maybe check this
+      state.activeLayerCtx.globalAlpha = state.opacity;
+      state.activeLayerCtx.drawImage(this.tmpLayer.canvas, 0, 0);
+      state.activeLayerCtx.globalCompositeOperation = 'source-over';
+      state.activeLayerCtx.globalAlpha = 1;
+    } 
+    // There's other BrushControl types but I'm unsure how to implement those
+    else {
+      state.activeLayerCtx.globalAlpha = state.pressure * state.opacity;
+      state.activeLayerCtx.drawImage(this.tmpLayer.canvas, 0, 0);
+      state.activeLayerCtx.globalAlpha = 1;
     }
-    state.activeLayerCtx.globalAlpha = state.pressure * state.opacity;
-    state.activeLayerCtx.drawImage(this.tmpLayer.canvas, 0, 0);
-    // Reset canvas compositor mode to defaults
-    if (state.brushControl === BrushControl.BRUSHCONTROL_ERASER) {
-      state.activeLayerCtx.globalCompositeOperation = "source-over";
-    }
-    state.activeLayerCtx.globalAlpha = 1;
   }
 
   private setLayer(index: number) {
