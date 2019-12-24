@@ -11,6 +11,24 @@ So of course... I wanted to try :P
 * Fully functional .drw file parser on par with Colors versions 1100-1299. I've only tested it with 3DS and iOS paintings so far but it should(?) support other versions.
 * Mostly complete (~95%) .drw renderer using the HTML5 canvas API. It's extremely slow and doesn't quite implement blending properly, but it works well enough for debugging purposes.
 
+## Showcase
+
+| Colors Render (target) | DrwRenderer.ts (result) |
+|--|--|
+| [Painting by Lynarc](https://www.colorslive.com/details/4353728) |
+| ![Zelda painting target](https://raw.githubusercontent.com/jaames/colors-drw-parser/master/showcase/4353728_target.png) | ![Zelda painting result](https://raw.githubusercontent.com/jaames/colors-drw-parser/master/showcase/4353728_result.png) |
+| [Painting by -renge-](https://www.colorslive.com/details/4389509) |
+| ![Anime painting target](https://raw.githubusercontent.com/jaames/colors-drw-parser/master/showcase/4389509_target.png) | ![Anime painting result](https://raw.githubusercontent.com/jaames/colors-drw-parser/master/showcase/4389509_result.png) |
+| [Painting by M.Collins](https://www.colorslive.com/details/4390483) |
+| ![Fallout painting target](https://raw.githubusercontent.com/jaames/colors-drw-parser/master/showcase/4390483_target.png) | ![Fallout painting result](https://raw.githubusercontent.com/jaames/colors-drw-parser/master/showcase/4390483_result.png) |
+| [Painting by acchan](https://www.colorslive.com/details/4389168) |
+| ![Village painting target](https://raw.githubusercontent.com/jaames/colors-drw-parser/master/showcase/4389168_target.png) | ![Village painting result](https://raw.githubusercontent.com/jaames/colors-drw-parser/master/showcase/4389168_result.png) |
+| [Painting by Greeso](https://www.colorslive.com/details/4390461) |
+| ![Bunny painting target](https://raw.githubusercontent.com/jaames/colors-drw-parser/master/showcase/4390461_target.png) | ![Bunny painting result](https://raw.githubusercontent.com/jaames/colors-drw-parser/master/showcase/4390461_result.png) |
+
+
+
+
 ## Todo
 
 * webGL renderer - necessary for perfomance, but tricky since webGL doesnt support some of the features that Colors uses for stroke blending.
