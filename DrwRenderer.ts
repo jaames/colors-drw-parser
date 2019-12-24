@@ -235,7 +235,7 @@ export class DrwRenderer {
     // for some reason strokes look smaller than they should be and are rather jaggy
     // For small sizes, we can use the builtin canvas path drawing API, which looks close enough for such small brush sizes
     // Path drawing is also a *lot* quicker, so it's a nice optimization
-    const usePathApi = brushRadius < 4;
+    const usePathApi = brushRadius < 2;
     // If we're using brush stamping, we wanna use a temp layer to draw the brush stroke to then composite that to the active layer in one go
     // Otherwise we can get away with drawing directly to the active layer
     const ctx = usePathApi ? state.activeLayerCtx : this.tmpLayer.ctx;
