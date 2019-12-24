@@ -235,7 +235,6 @@ export class DrwRenderer {
   private brushStroke() {
     const state = this.state;
     const brushRadius = state.brushRadius;
-    const brushSize = brushRadius * 2;
     const brushTexture = this.brushCanvas;
 
     // Draw stroke to tmp layer
@@ -250,7 +249,7 @@ export class DrwRenderer {
       ctx.drawImage(brushTexture, x - brushRadius, y - brushRadius);
     }
     // Otherwise connect points with lines of brush stamps
-    else {
+    else if ((this.brushPoints.length > 1) && (brushRadius > 4)) {
       // For each stroke segment
       for (let i = 1; i < this.brushPoints.length - 1; i++) {
         const [x0, y0] = this.brushPoints[i - 1];
@@ -266,6 +265,20 @@ export class DrwRenderer {
           ctx.drawImage(brushTexture, x - brushRadius, y - brushRadius);
         }
       }
+    }
+    // Stamping doesn't work so well for small brush sizes
+    else if ((this.brushPoints.length > 1)) {
+      const [r, g, b] = state.color;
+      ctx.strokeStyle = `rgb(${r}, ${g}, ${b})`;
+      ctx.lineWidth = brushRadius * 2;
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+      ctx.beginPath();
+      ctx.moveTo(this.brushPoints[0][0], this.brushPoints[0][1]);
+      for (let i = 1; i < this.brushPoints.length - 1; i++) {
+        ctx.lineTo(this.brushPoints[i][0], this.brushPoints[i][1]);
+      }
+      ctx.stroke();
     }
     // Clear stroke segments
     this.brushPoints = [];
