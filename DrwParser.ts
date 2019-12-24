@@ -38,21 +38,21 @@ export enum DrwPlatform {
 };
 
 export const enum CommandType {
-  TYPE_BRUSH = 0,
-  TYPE_BRUSHEND = 1,
+  TYPE_DRAW = 0,
+  TYPE_DRAWEND = 1,
   TYPE_COLORCHANGE = 2,
   TYPE_SIZECHANGE = 3,
 };
 
 export interface BrushCommand {
-  type: CommandType.TYPE_BRUSH;
+  type: CommandType.TYPE_DRAW;
   pressure: number;
   x: number;
   y: number;
 };
 
 export interface BrushEndCommand {
-  type: CommandType.TYPE_BRUSHEND;
+  type: CommandType.TYPE_DRAWEND;
   layer: number;
   layerAction: LayerAction; 
 };
@@ -92,7 +92,7 @@ export enum BrushType {
 
 export enum LayerAction {
   LAYERACTION_SET = 0,
-  LAYERACTION_NEWINDEX = 1,
+  LAYERACTION_NEWPOS = 1,
   LAYERACTION_CLEAR = 2,
   LAYERACTION_COPY = 3,
 };
@@ -155,23 +155,23 @@ export class DrwParser {
     const cmd = this.data.getInt32(320 + index * 4, LITTLE_ENDIAN);
     const type = cmd & 0x3;
     switch (type) {
-      case CommandType.TYPE_BRUSH:
+      case CommandType.TYPE_DRAW:
         const pressure = (cmd >> 2) & 0xFF;
         const x =        (cmd >> 10) & 0x7FF;
         const y =        (cmd >> 21) & 0x7FF;
         return {
-          type: CommandType.TYPE_BRUSH,
+          type: CommandType.TYPE_DRAW,
           pressure: pressure / 255,
           x: (x - 512) / 1024,
           y: (y - 512) / 1024,
         };
-      case CommandType.TYPE_BRUSHEND:
+      case CommandType.TYPE_DRAWEND:
         // 1 unused bit
         const layer =       (cmd >> 3) & 0xFF;
         const layerAction = (cmd >> 11) & 0x3;
         return {
-          type: CommandType.TYPE_BRUSHEND,
-          layer: layer > 0 ? ( layer - 1) : null,
+          type: CommandType.TYPE_DRAWEND,
+          layer: layer === 0 ? null : (layer - 1),
           layerAction: <LayerAction>layerAction
         };
       case CommandType.TYPE_COLORCHANGE:

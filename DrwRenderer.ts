@@ -6,10 +6,6 @@
 import { 
   Color,
   CommandType,
-  BrushCommand,
-  BrushEndCommand,
-  ColorChangeCommand,
-  SizeChangeCommand,
   BrushControl,
   BrushType,
   LayerAction,
@@ -136,6 +132,7 @@ export class DrwRenderer {
   // Composite all the painting layers into a single canvas
   // Only needs to be done to produce a final image
   public blitTo(ctx: CanvasRenderingContext2D) {
+    // Canvas background is always white?
     ctx.fillStyle = '#fff';
     ctx.fillRect(0, 0, this.width, this.height);
     for (let layerIndex = 4; layerIndex >= 0; layerIndex--) {
@@ -146,93 +143,75 @@ export class DrwRenderer {
 
   public handleCommand(cmdIndex: number) {
     const cmd = this.drw.getCommand(cmdIndex);
-    if (cmd.type === CommandType.TYPE_BRUSH) {
-      this.handleDrawCommand(cmd);
-    } 
-    else if (cmd.type === CommandType.TYPE_BRUSHEND) {
-      this.handleDrawEndCommand(cmd);
-    }
-    else if (cmd.type === CommandType.TYPE_COLORCHANGE) {
-      this.handleColorChangeCommand(cmd);
-    }
-    else if (cmd.type === CommandType.TYPE_SIZECHANGE) {
-      this.handleSizeChangeCommand(cmd);
-    }
-  }
-
-  private handleDrawCommand(cmd: BrushCommand) {
-    const { state } = this;
-    const x = cmd.x * this.width;
-    const y = cmd.y * this.height;
-    state.brushPoints.push([x, y]);
-    state.pressure = cmd.pressure;
-    state.x = x;
-    state.y = y;
-    state.isDrawing = true;
-  }
-
-  private handleDrawEndCommand(cmd: BrushEndCommand) {
-    const { state } = this;
-    if (cmd.layer === null) {
-      this.brushStroke();
-      state.isDrawing = false;
-    } else {
-      if (cmd.layerAction === LayerAction.LAYERACTION_SET) {
-        this.setLayer(cmd.layer);
-      }
-      else if (cmd.layerAction === LayerAction.LAYERACTION_NEWINDEX) {
-        this.moveLayer(state.layer, cmd.layer);
-        this.setLayer(state.layer);
-      }
-      else if (cmd.layerAction === LayerAction.LAYERACTION_CLEAR) {
-        this.clearLayer(cmd.layer);
-      }
-      else if (cmd.layerAction === LayerAction.LAYERACTION_COPY) {
-        this.copyLayer(state.layer, cmd.layer);
-      }
-    }
-  }
-
-  private handleColorChangeCommand(cmd: ColorChangeCommand) {
     const state = this.state;
-    if (cmd.color !== null) {
-      state.color = cmd.color;
-      this.updateBrush();
-    } 
-    else {
-      if (cmd.flipX || cmd.flipY) {
-        this.flip(cmd.flipX, cmd.flipY);
-      }
-      state.flipX = cmd.flipX;
-      state.flipY = cmd.flipY;
-      state.user = cmd.user; // not sure how meaningful changing user is, should it reset tool state?
+    switch (cmd.type) {
+      // TYPE_DRAW: begin a brush stroke
+      case CommandType.TYPE_DRAW:
+        const x = cmd.x * this.width;
+        const y = cmd.y * this.height;
+        state.brushPoints.push([x, y]);
+        state.pressure = cmd.pressure;
+        state.x = x;
+        state.y = y;
+        state.isDrawing = true;
+        break;
+      // TYPE_DRAWEND: either signifies the end of the brush stroke OR a layer operation
+      case CommandType.TYPE_DRAWEND:
+        if (cmd.layer === null) {
+          if (state.brushPoints.length > 0) this.brushStroke();
+          state.brushPoints = [];
+          state.isDrawing = false;
+        }
+        else {
+          switch (cmd.layerAction) {
+            case LayerAction.LAYERACTION_SET:
+              this.setLayer(cmd.layer);
+              break;
+            case LayerAction.LAYERACTION_NEWPOS:
+              this.moveLayer(state.layer, cmd.layer);
+              this.setLayer(state.layer);
+              break;
+            case LayerAction.LAYERACTION_CLEAR:
+              this.clearLayer(cmd.layer);
+              break;
+            case LayerAction.LAYERACTION_COPY:
+              this.copyLayer(state.layer, cmd.layer);
+              break;
+          }
+        }
+        break;
+      // TYPE_COLORCHANGE: changes the brush color, OR flips the canvas, OR changes the user
+      case CommandType.TYPE_COLORCHANGE:
+        if (cmd.color !== null) {
+          state.color = cmd.color;
+          this.updateBrush();
+        } 
+        else {
+          if (cmd.flipX || cmd.flipY) this.flip(cmd.flipX, cmd.flipY);
+          state.flipX = cmd.flipX;
+          state.flipY = cmd.flipY;
+          state.user = cmd.user; // not sure how meaningful changing user is, should it reset tool state?
+        }
+        break;
+      // TYPE_SIZECHANGE: changes the brush size, control, type and opacity 
+      case CommandType.TYPE_SIZECHANGE:
+        // Can any of these change mid-stroke?
+        state.brushRadius = cmd.size * this.width;
+        state.brushControl = cmd.brushControl;
+        state.brushType = cmd.brushType;
+        state.opacity = cmd.opacity;
+        this.updateBrush();
+        break;
     }
   }
-
-  private handleSizeChangeCommand(cmd: SizeChangeCommand) {
-    const state = this.state;
-    // Can any of these change mid-stroke?
-    state.brushControl = cmd.brushControl;
-    state.brushType = cmd.brushType;
-    state.brushRadius = cmd.size * this.width;
-    state.opacity = cmd.opacity;
-    this.updateBrush();
-  }
-
+  
   private updateBrush() {
     const state = this.state;
     const ctx = this.brushCtx;
     const [r, g, b] = state.color;
     const brushRadius = state.brushRadius;
     const brushSize = Math.max(brushRadius * 2, 1);
-    let brushTexture;
-    switch (state.brushControl) {
-      case BrushControl.BRUSHCONTROL_ERASER:
-        brushTexture = this.brushTextures[0];
-        break;
-      default:
-        brushTexture = this.brushTextures[state.brushType];
-    }
+    let brushTexture = this.brushTextures[state.brushType];
     // Setting canvas size also clears it
     this.brushCanvas.width = brushSize;
     this.brushCanvas.height = brushSize;
@@ -277,11 +256,9 @@ export class DrwRenderer {
     if (!usePathApi) {
       this.tmpLayer.ctx.clearRect(0, 0, this.width, this.height);
     }
-
     // This is where we use the canvas path API to draw small strokes
     if ((usePathApi) && (brushPoints.length > 0)) {
       const [r, g, b] = state.color;
-      // TODO: tweak stroke style to loosely approximate the current brushType
       ctx.strokeStyle = `rgb(${r}, ${g}, ${b})`;
       ctx.lineWidth = brushRadius * 2;
       ctx.lineCap = 'round';
@@ -293,13 +270,11 @@ export class DrwRenderer {
       }
       ctx.stroke();
     }
-    
     // If there's only one set of brush coords, use a single brush stamp
     else if (brushPoints.length === 1) {
       const [x, y] = brushPoints[0];
       ctx.drawImage(brushTexture, x - brushRadius, y - brushRadius);
     }
-
     // Otherwise connect points with lines of brush stamps
     else if (brushPoints.length > 1) {
       // For each stroke segment
