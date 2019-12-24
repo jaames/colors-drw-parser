@@ -22,5 +22,5 @@ So of course... I wanted to try :P
 This is mostly just a fun weekend project for me. That said, I think it would be neat to make a 3D painting visualizer where you can view the painting layers in 3D space while the image is replayed... and it would be even neater to hook that up to a pair of VR goggles. :^)
 
 ## Credits
-[James Daniel](https://github.com/jaames) - Implementation
-[Jens Andersson](http://collectingsmiles.com/) - Colors dev, was kind enough to provide [documentation](https://www.dropbox.com/s/fmjptpshi93bojp/DRW%20Format%201200.docx?dl=0), as well as the actual brush textures used in the Colors app (thanks again!)
+* [James Daniel](https://github.com/jaames) - Implementation
+* [Jens Andersson](http://collectingsmiles.com/) - Colors dev, was kind enough to provide [documentation](https://www.dropbox.com/s/fmjptpshi93bojp/DRW%20Format%201200.docx?dl=0), as well as the actual brush textures used in the Colors app (thanks again!)
