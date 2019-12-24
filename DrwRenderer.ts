@@ -136,7 +136,8 @@ export class DrwRenderer {
   // Composite all the painting layers into a single canvas
   // Only needs to be done to produce a final image
   public blitTo(ctx: CanvasRenderingContext2D) {
-    ctx.clearRect(0, 0, this.width, this.height);
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(0, 0, this.width, this.height);
     for (let layerIndex = 4; layerIndex >= 0; layerIndex--) {
       const layer = this.layers[layerIndex];
       if (layer.isVisible) ctx.drawImage(this.layers[layerIndex].canvas, 0, 0);
@@ -204,12 +205,13 @@ export class DrwRenderer {
       }
       state.flipX = cmd.flipX;
       state.flipY = cmd.flipY;
-      state.user = cmd.user;
+      state.user = cmd.user; // not sure how meaningful changing user is, should it reset tool state?
     }
   }
 
   private handleSizeChangeCommand(cmd: SizeChangeCommand) {
     const state = this.state;
+    // Can any of these change mid-stroke?
     state.brushControl = cmd.brushControl;
     state.brushType = cmd.brushType;
     state.brushRadius = cmd.size * this.width;
@@ -223,15 +225,24 @@ export class DrwRenderer {
     const [r, g, b] = state.color;
     const brushRadius = state.brushRadius;
     const brushSize = Math.max(brushRadius * 2, 1);
-    const brushTexture = state.brushControl !== BrushControl.BRUSHCONTROL_ERASER ? this.brushTextures[state.brushType] : this.brushTextures[0];
+    let brushTexture;
+    switch (state.brushControl) {
+      case BrushControl.BRUSHCONTROL_ERASER:
+        brushTexture = this.brushTextures[0];
+        break;
+      default:
+        brushTexture = this.brushTextures[state.brushType];
+    }
     // Setting canvas size also clears it
     this.brushCanvas.width = brushSize;
     this.brushCanvas.height = brushSize;
     ctx.drawImage(brushTexture, 0, 0, brushSize, brushSize);
     // Apply color
+    // Using source-in means whatever is drawn next uses the alpha channel from the existing canvas content (in this case, our brush texture)
     ctx.globalCompositeOperation = 'source-in';
     ctx.fillStyle = `rgb(${r}, ${g}, ${b})`;
     ctx.fillRect(0, 0, brushSize, brushSize);
+    // Reset to default compositing op
     ctx.globalCompositeOperation = 'source-over';
   }
 
@@ -240,20 +251,57 @@ export class DrwRenderer {
     const brushPoints = state.brushPoints;
     const brushRadius = state.brushRadius;
     const brushTexture = this.brushCanvas;
+    // Brush strokes are normally drawn by "stamping" the brush texture (with drawImage()) along the stroke path
+    // However, this technique doesn't play nicely with the HTML5 canvas API when the brush size is small,
+    // for some reason strokes look smaller than they should be and are rather jaggy
+    // For small sizes, we can use the builtin canvas path drawing API, which looks close enough for such small brush sizes
+    // Path drawing is also a *lot* quicker, so it's a nice optimization
+    const usePathApi = brushRadius < 4;
+    // If we're using brush stamping, we wanna use a temp layer to draw the brush stroke to then composite that to the active layer in one go
+    // Otherwise we can get away with drawing directly to the active layer
+    const ctx = usePathApi ? state.activeLayerCtx : this.tmpLayer.ctx;
+    // Set up target canvas compositing
+    if (state.brushControl === BrushControl.BRUSHCONTROL_ERASER) {
+      // destination-out: anything drawing to the canvas in this mode will erase content
+      state.activeLayerCtx.globalCompositeOperation = 'destination-out';
+      // Using globalAlpha like this means the entire stroke can be drawn to the layer with a consistent alpha value
+      // This seems to be consistent with how Color's brushes work (or at least on 3DS)
+      // Also, eraser doesn't seem to use pressure, but I'm not sure if this is 100% correct?
+      state.activeLayerCtx.globalAlpha = state.opacity;
+    }
+    // There's other BrushControl types but I'm unsure how to implement those :')
+    else {
+      state.activeLayerCtx.globalAlpha = state.pressure * state.opacity;
+    }
+    // Clear tmp layer if we're going to stamp to it
+    if (!usePathApi) {
+      this.tmpLayer.ctx.clearRect(0, 0, this.width, this.height);
+    }
 
-    // Draw stroke to tmp layer
-    // The stroke is drawn with no opacity, then composited onto the actual layer later
-    // This is the only way to ensure consistent opacity across the stroke, accurate to the way Colors draws them
-    const ctx = this.tmpLayer.ctx;
-    ctx.clearRect(0, 0, this.width, this.height);
-
+    // This is where we use the canvas path API to draw small strokes
+    if ((usePathApi) && (brushPoints.length > 0)) {
+      const [r, g, b] = state.color;
+      // TODO: tweak stroke style to loosely approximate the current brushType
+      ctx.strokeStyle = `rgb(${r}, ${g}, ${b})`;
+      ctx.lineWidth = brushRadius * 2;
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+      ctx.beginPath();
+      ctx.moveTo(brushPoints[0][0], brushPoints[0][1]);
+      for (let i = 1; i < brushPoints.length - 1; i++) {
+        ctx.lineTo(brushPoints[i][0], brushPoints[i][1]);
+      }
+      ctx.stroke();
+    }
+    
     // If there's only one set of brush coords, use a single brush stamp
-    if (brushPoints.length === 1) {
+    else if (brushPoints.length === 1) {
       const [x, y] = brushPoints[0];
       ctx.drawImage(brushTexture, x - brushRadius, y - brushRadius);
     }
+
     // Otherwise connect points with lines of brush stamps
-    else if ((brushPoints.length > 1) && (brushRadius > 4)) {
+    else if (brushPoints.length > 1) {
       // For each stroke segment
       for (let i = 1; i < brushPoints.length - 1; i++) {
         const [x0, y0] = brushPoints[i - 1];
@@ -269,39 +317,14 @@ export class DrwRenderer {
           ctx.drawImage(brushTexture, x - brushRadius, y - brushRadius);
         }
       }
-    }
-    // Stamping doesn't work so well for small brush sizes
-    else if (brushPoints.length > 1) {
-      const [r, g, b] = state.color;
-      ctx.strokeStyle = `rgb(${r}, ${g}, ${b})`;
-      ctx.lineWidth = brushRadius * 2;
-      ctx.lineCap = 'round';
-      ctx.lineJoin = 'round';
-      ctx.beginPath();
-      ctx.moveTo(brushPoints[0][0], brushPoints[0][1]);
-      for (let i = 1; i < brushPoints.length - 1; i++) {
-        ctx.lineTo(brushPoints[i][0], brushPoints[i][1]);
-      }
-      ctx.stroke();
+      // Composite tmp brush layer to the active painting layer
+      state.activeLayerCtx.drawImage(this.tmpLayer.canvas, 0, 0);
     }
     // Clear stroke segments
     state.brushPoints = [];
-    // Next step is to composite tmp brush layer to the active painting layer
-    // Eraser: removes from layer 
-    if (state.brushControl === BrushControl.BRUSHCONTROL_ERASER) {
-      state.activeLayerCtx.globalCompositeOperation = 'destination-out';
-      // TODO: not sure if this is 100% correct, maybe check this
-      state.activeLayerCtx.globalAlpha = state.opacity;
-      state.activeLayerCtx.drawImage(this.tmpLayer.canvas, 0, 0);
-      state.activeLayerCtx.globalCompositeOperation = 'source-over';
-      state.activeLayerCtx.globalAlpha = 1;
-    } 
-    // There's other BrushControl types but I'm unsure how to implement those
-    else {
-      state.activeLayerCtx.globalAlpha = state.pressure * state.opacity;
-      state.activeLayerCtx.drawImage(this.tmpLayer.canvas, 0, 0);
-      state.activeLayerCtx.globalAlpha = 1;
-    }
+    // Reset layer compositing
+    state.activeLayerCtx.globalCompositeOperation = 'source-over';
+    state.activeLayerCtx.globalAlpha = 1;
   }
 
   private setLayer(index: number) {
@@ -310,7 +333,9 @@ export class DrwRenderer {
   }
 
   private moveLayer(srcIndex: number, dstIndex: number) {
+    // Remove from layer stack
     const srcLayer = this.layers.splice(srcIndex, 1)[0];
+    // Reinsert into layer stack at new position
     this.layers.splice(dstIndex, 0, srcLayer);
   }
 
