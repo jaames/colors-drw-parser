@@ -211,7 +211,7 @@ export class DrwRenderer {
     const [r, g, b] = state.color;
     const brushRadius = state.brushRadius;
     const brushSize = Math.max(brushRadius * 2, 1);
-    let brushTexture = this.brushTextures[state.brushType];
+    const brushTexture = state.brushControl === BrushControl.BRUSHCONTROL_ERASER ? this.brushTextures[0] : this.brushTextures[state.brushType];
     // Setting canvas size also clears it
     this.brushCanvas.width = brushSize;
     this.brushCanvas.height = brushSize;
@@ -235,7 +235,7 @@ export class DrwRenderer {
     // for some reason strokes look smaller than they should be and are rather jaggy
     // For small sizes, we can use the builtin canvas path drawing API, which looks close enough for such small brush sizes
     // Path drawing is also a *lot* quicker, so it's a nice optimization
-    const usePathApi = brushRadius < 2;
+    const usePathApi = brushRadius < 3;
     // If we're using brush stamping, we wanna use a temp layer to draw the brush stroke to then composite that to the active layer in one go
     // Otherwise we can get away with drawing directly to the active layer
     const ctx = usePathApi ? state.activeLayerCtx : this.tmpLayer.ctx;
@@ -246,7 +246,7 @@ export class DrwRenderer {
       // Using globalAlpha like this means the entire stroke can be drawn to the layer with a consistent alpha value
       // This seems to be consistent with how Color's brushes work (or at least on 3DS)
       // Also, eraser doesn't seem to use pressure, but I'm not sure if this is 100% correct?
-      state.activeLayerCtx.globalAlpha = state.opacity;
+      state.activeLayerCtx.globalAlpha = state.pressure * state.opacity;
     }
     // There's other BrushControl types but I'm unsure how to implement those :')
     else {
