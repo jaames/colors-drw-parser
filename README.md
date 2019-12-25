@@ -31,10 +31,8 @@ So of course... I wanted to try :P
 
 ## Todo
 
-* Why do I seem to be getting the incorrect color sometimes? (e.g. the pearl necklace in the Zelda painting)
-* What's wrong with my soft brush implementation? (e.g. the eyes in the colorful anime painting, the lineart in the bunny painting)
-* Is the eraser meant to use pressure or just opacity?
-* Why do finer brushstrokes seem too thin (e.g the hair strand to the right of the face in the colorful anime painting)
+* Investigate eraser handling, I think I'm messing up eraser pressure or something (notable on the eyes and left ear of the colorful anime painting)
+* Figure out why finer brushstrokes seem too thin (e.g the hair strand to the right of the face in the colorful anime painting)
 * Implement webGL renderer - necessary for perfomance, but tricky since webGL doesnt support some of the features that Colors uses for stroke blending.
 * Animated + seekable drawing playback.
 * `BRUSHCONTROL_FULL`, `BRUSHCONTROL_VARIABLESIZE`, `BRUSHCONTROL_VARIABLESIZEOPACITY`, `BRUSHCONTROL_DISTANCEOPACITY` brush control types. I haven't seen these in use so I don't know exactly what these do or how they work.
