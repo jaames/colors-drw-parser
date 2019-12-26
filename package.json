@@ -4,6 +4,7 @@
   "description": "Experimental parser and renderer for Colors! painting files",
   "devDependencies": {
     "parcel-bundler": "^1.12.4",
+    "three": "^0.112.0",
     "typescript": "^3.7.4"
   },
   "scripts": {

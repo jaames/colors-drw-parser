@@ -48,6 +48,7 @@ class DrwLayer {
   public canvas: HTMLCanvasElement;
   public ctx: CanvasRenderingContext2D;
   public isVisible: boolean = true;
+  public hasChanged: boolean = false;
 
   constructor () {
     this.canvas = document.createElement('canvas');
@@ -68,7 +69,7 @@ export class DrwRenderer {
   private brushCanvas: HTMLCanvasElement;
   private brushCtx: CanvasRenderingContext2D;
 
-  private playbackState: PlaybackState = {
+  public playbackState: PlaybackState = {
     isPlaying: false,
     commandsPerUpdate: 200,
     numCommands: 0,
@@ -364,6 +365,8 @@ export class DrwRenderer {
     // Reset layer compositing
     state.activeLayerCtx.globalCompositeOperation = 'source-over';
     state.activeLayerCtx.globalAlpha = 1;
+    // Mark layer as changed
+    this.layers[state.layer].hasChanged = true;
   }
 
   private setLayer(index: number) {
@@ -376,6 +379,9 @@ export class DrwRenderer {
     const srcLayer = this.layers.splice(srcIndex, 1)[0];
     // Reinsert into layer stack at new position
     this.layers.splice(dstIndex, 0, srcLayer);
+    // Mark layers as changed
+    this.layers[srcIndex].hasChanged = true;
+    this.layers[dstIndex].hasChanged = true;
   }
 
   private copyLayer(srcIndex: number, dstIndex: number) {
@@ -388,10 +394,14 @@ export class DrwRenderer {
     dstCtx.drawImage(this.layers[srcIndex].canvas, 0, 0);
     // Reset the compositing operation to default
     if (isSrcLower) dstCtx.globalCompositeOperation = 'source-over';
+    // Mark layer as changed
+    this.layers[dstIndex].hasChanged = true;
   }
   
   private clearLayer(index: number) {
     this.layers[index].ctx.clearRect(0, 0, this.width, this.height);
+    // Mark layer as changed
+    this.layers[index].hasChanged = true;
   }
 
   private flip(flipX: boolean, flipY: boolean) {
@@ -412,6 +422,8 @@ export class DrwRenderer {
       layer.ctx.drawImage(tmp.canvas, flipX ? -width : 0, flipY ? -height : 0);
       // cleanup
       layer.ctx.scale(scaleX, scaleY);
+      // Mark layer as changed
+      layer.hasChanged = true;
     });
   }
 }
