@@ -27,19 +27,42 @@ So of course... I wanted to try :P
 | ![Bunny painting target](https://raw.githubusercontent.com/jaames/colors-drw-parser/master/showcase/4390461_target.png) | ![Bunny painting result](https://raw.githubusercontent.com/jaames/colors-drw-parser/master/showcase/4390461_result.png) |
 
 
-
-
 ## Todo
 
-* Investigate eraser handling, I think I'm messing up eraser pressure or something (notable on the eyes and left ear of the colorful anime painting)
-* Figure out why finer brushstrokes seem too thin (e.g the hair strand to the right of the face in the colorful anime painting)
-* Implement webGL renderer - necessary for perfomance, but tricky since webGL doesnt support some of the features that Colors uses for stroke blending.
-* Animated + seekable drawing playback.
+* It seems pressure/opacity can change mid-stroke. I'll need to figure out how this works exactly because it seems to be throwing me off in places, like on the eyes and left ear of the colorful anime painting.
+* Figure out why small brushstrokes seem too thin, like the hair strand to the right of the face in the colorful anime painting.
+* Implement webGL renderer - would probably have better performance than the JS canvas API, but tricky since webGL doesnt support some of the features that Colors uses for brush stamp blending.
 * `BRUSHCONTROL_FULL`, `BRUSHCONTROL_VARIABLESIZE`, `BRUSHCONTROL_VARIABLESIZEOPACITY`, `BRUSHCONTROL_DISTANCEOPACITY` brush control types. I haven't seen these in use so I don't know exactly what these do or how they work.
 
 ## Longer Term Goals
 
-This is mostly just a fun weekend project for me. That said, I think it would be neat to make a 3D painting visualizer where you can view the painting layers in 3D space while the image is replayed... and it would be even neater to hook that up to a pair of VR goggles. :^)
+This is mostly just a fun weekend project for me. That said, I have a few neat ideas in mind:
+
+* 3D visualizer where you can watch the painting playback and move around the layers in 3d space
+* Stream playback to ffmpeg as frames, for video conversion
+* VR viewer :^)
+
+## Building
+
+Building requires NodeJS and npm to be installed
+
+**Install dependencies**
+
+```bash
+$ npm install
+```
+
+**Start testing server**
+
+```bash
+$ npm run dev
+```
+
+**Build production JS files**
+
+```bash
+$ npm run build
+```
 
 ## Credits
 * [James Daniel](https://github.com/jaames) - Implementation

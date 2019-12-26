@@ -36,6 +36,14 @@ interface ToolState {
   user: number;
 };
 
+interface PlaybackState {
+  isPlaying: boolean;
+  commandsPerUpdate: number;
+  currCommandIndex: number;
+  numCommands: number;
+  updateCompleteCallback: () => void;
+};
+
 class DrwLayer {
   public canvas: HTMLCanvasElement;
   public ctx: CanvasRenderingContext2D;
@@ -60,7 +68,15 @@ export class DrwRenderer {
   private brushCanvas: HTMLCanvasElement;
   private brushCtx: CanvasRenderingContext2D;
 
-  private state: ToolState = {
+  private playbackState: PlaybackState = {
+    isPlaying: false,
+    commandsPerUpdate: 200,
+    numCommands: 0,
+    currCommandIndex: 0,
+    updateCompleteCallback: () => {}
+  };
+
+  private toolState: ToolState = {
     activeLayerCtx: null,
     layer: 0,
     color: [0, 0, 0],
@@ -91,24 +107,24 @@ export class DrwRenderer {
     this.setLayer(0);
     this.brushCanvas = document.createElement('canvas');
     this.brushCtx = this.brushCanvas.getContext('2d');
-  }
-  
-  // Fetch an image (for texture loading)
-  private async fetchImage(src: string): Promise<HTMLImageElement> {
-    return new Promise((resolve, reject) => {
-      const image = new Image();
-      image.onload = () => resolve(image);
-      image.onerror = () => reject();
-      image.src = src; 
-    });
+    this.playbackState.numCommands = drw.numCommands;
   }
 
   // Load all the brush textures
   public async prepare() {
+    // Fetch an image (for texture loading)
+    async function fetchImage(src: string): Promise<HTMLImageElement> {
+      return new Promise((resolve, reject) => {
+        const image = new Image();
+        image.onload = () => resolve(image);
+        image.onerror = () => reject();
+        image.src = src; 
+      });
+    }
     return Promise.all([
-      this.fetchImage(brushHardTex),
-      this.fetchImage(brushSoftTex),
-      this.fetchImage(brushBristleTex),
+      fetchImage(brushHardTex),
+      fetchImage(brushSoftTex),
+      fetchImage(brushBristleTex),
     ])
     .then((brushTextures) => {
       this.brushTextures = brushTextures;
@@ -141,9 +157,56 @@ export class DrwRenderer {
     }
   }
 
+  public seekCommand(newCommandIndex: number): void {
+    const playbackState = this.playbackState;
+    let startIndex;
+    // Don't allow the index to gall out of range
+    newCommandIndex = Math.min(Math.max(0, newCommandIndex), playbackState.numCommands - 1);
+    // If the new command index comes before the current playback progress, we need to repaint from scratch
+    if (newCommandIndex < playbackState.currCommandIndex) {
+      // Clear all layers
+      for (let i = 0; i < this.layers.length; i++) {
+        this.clearLayer(i);
+      }
+      startIndex = 0;
+    }
+    // Otherwise we can start after the current command
+    else {
+      startIndex = playbackState.currCommandIndex + 1;
+    }
+    for (let cmd = startIndex; cmd <= newCommandIndex; cmd++) {
+      this.handleCommand(cmd);
+    }
+    playbackState.updateCompleteCallback();
+  }
+
+  public onUpdate(callback: () => void) {
+    this.playbackState.updateCompleteCallback = callback;
+  }
+
+  private playbackLoop() {
+    const playbackState = this.playbackState;
+    this.seekCommand(playbackState.currCommandIndex + playbackState.commandsPerUpdate);
+    if (playbackState.isPlaying && playbackState.currCommandIndex < playbackState.numCommands -1) {
+      requestAnimationFrame(() => this.playbackLoop());
+    } else {
+      playbackState.isPlaying = false;
+    }
+  }
+
+  public play() {
+    const playbackState = this.playbackState;
+    playbackState.isPlaying = true;
+    requestAnimationFrame(() => this.playbackLoop());
+  }
+
+  public pause() {
+    this.playbackState.isPlaying = false;
+  }
+
   public handleCommand(cmdIndex: number) {
     const cmd = this.drw.getCommand(cmdIndex);
-    const state = this.state;
+    const state = this.toolState;
     switch (cmd.type) {
       // TYPE_DRAW: begin a brush stroke
       case CommandType.TYPE_DRAW:
@@ -158,7 +221,7 @@ export class DrwRenderer {
       // TYPE_DRAWEND: either signifies the end of the brush stroke OR a layer operation
       case CommandType.TYPE_DRAWEND:
         if (cmd.layer === null) {
-          if (state.brushPoints.length > 0) this.brushStroke();
+          this.brushStroke();
           state.brushPoints = [];
           state.isDrawing = false;
         }
@@ -203,15 +266,16 @@ export class DrwRenderer {
         this.updateBrush();
         break;
     }
+    this.playbackState.currCommandIndex = cmdIndex;
   }
   
   private updateBrush() {
-    const state = this.state;
+    const state = this.toolState;
     const ctx = this.brushCtx;
     const [r, g, b] = state.color;
     const brushRadius = state.brushRadius;
     const brushSize = Math.max(brushRadius * 2, 1);
-    const brushTexture = state.brushControl === BrushControl.BRUSHCONTROL_ERASER ? this.brushTextures[0] : this.brushTextures[state.brushType];
+    const brushTexture = this.brushTextures[state.brushType];
     // Setting canvas size also clears it
     this.brushCanvas.width = brushSize;
     this.brushCanvas.height = brushSize;
@@ -226,7 +290,7 @@ export class DrwRenderer {
   }
 
   private brushStroke() {
-    const state = this.state;
+    const state = this.toolState;
     const brushPoints = state.brushPoints;
     const brushRadius = state.brushRadius;
     const brushTexture = this.brushCanvas;
@@ -235,7 +299,7 @@ export class DrwRenderer {
     // for some reason strokes look smaller than they should be and are rather jaggy
     // For small sizes, we can use the builtin canvas path drawing API, which looks close enough for such small brush sizes
     // Path drawing is also a *lot* quicker, so it's a nice optimization
-    const usePathApi = brushRadius < 3;
+    const usePathApi = brushRadius < 2;
     // If we're using brush stamping, we wanna use a temp layer to draw the brush stroke to then composite that to the active layer in one go
     // Otherwise we can get away with drawing directly to the active layer
     const ctx = usePathApi ? state.activeLayerCtx : this.tmpLayer.ctx;
@@ -303,8 +367,8 @@ export class DrwRenderer {
   }
 
   private setLayer(index: number) {
-    this.state.layer = index;
-    this.state.activeLayerCtx = this.layers[index].ctx;
+    this.toolState.layer = index;
+    this.toolState.activeLayerCtx = this.layers[index].ctx;
   }
 
   private moveLayer(srcIndex: number, dstIndex: number) {
