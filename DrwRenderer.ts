@@ -182,6 +182,22 @@ export class DrwRenderer {
     playbackState.updateCompleteCallback();
   }
 
+  public seekStart() {
+    this.seekCommand(0);
+  }
+
+  public seekEnd() {
+    this.seekCommand(this.playbackState.numCommands - 1);
+  }
+
+  public seekNext() {
+    this.seekCommand(this.playbackState.currCommandIndex + 1);
+  }
+
+  public seekPrev() {
+    this.seekCommand(this.playbackState.currCommandIndex - 1);
+  }
+
   public onUpdate(callback: () => void) {
     this.playbackState.updateCompleteCallback = callback;
   }
@@ -349,13 +365,15 @@ export class DrwRenderer {
         const [x0, y0] = brushPoints[i - 1];
         const [x1, y1] = brushPoints[i];
         // Stamp brush allong stroke segment
-        const strokeDist = Math.sqrt(Math.pow(x1 - x0, 2) + Math.pow(y1 - y0, 2));
-        const strokeAngle = Math.atan2(x1 - x0, y1 - y0);
-        const dX = Math.sin(strokeAngle);
-        const dY = Math.cos(strokeAngle);
-        for (let step = 0; step < strokeDist; step += 1) {
-          const x = x0 + dX * step;
-          const y = y0 + dY * step;
+        const dX = x1 - x0;
+        const dY = y1 - y0;
+        const strokeDist = Math.sqrt(dX * dX + dY * dY);
+        const stepX = dX / strokeDist;
+        const stepY = dY / strokeDist;
+        const distStep = Math.max(brushRadius * 0.1, 1);
+        for (let currDist = 0; currDist < strokeDist; currDist += distStep) {
+          const x = x0 + stepX * currDist;
+          const y = y0 + stepY * currDist;
           ctx.drawImage(brushTexture, x - brushRadius, y - brushRadius);
         }
       }
