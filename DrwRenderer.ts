@@ -73,7 +73,7 @@ export class DrwRenderer {
     isPlaying: false,
     commandsPerUpdate: 200,
     numCommands: 0,
-    currCommandIndex: 0,
+    currCommandIndex: -1,
     updateCompleteCallback: () => {}
   };
 
@@ -161,7 +161,7 @@ export class DrwRenderer {
   public seekCommand(newCommandIndex: number): void {
     const playbackState = this.playbackState;
     let startIndex;
-    // Don't allow the index to gall out of range
+    // Don't allow the index to fall out of range
     newCommandIndex = Math.min(Math.max(0, newCommandIndex), playbackState.numCommands - 1);
     // If the new command index comes before the current playback progress, we need to repaint from scratch
     if (newCommandIndex < playbackState.currCommandIndex) {
@@ -175,6 +175,7 @@ export class DrwRenderer {
     else {
       startIndex = playbackState.currCommandIndex + 1;
     }
+    // Loop through all the commands needed to paint up to the new position
     for (let cmd = startIndex; cmd <= newCommandIndex; cmd++) {
       this.handleCommand(cmd);
     }
@@ -190,7 +191,8 @@ export class DrwRenderer {
     this.seekCommand(playbackState.currCommandIndex + playbackState.commandsPerUpdate);
     if (playbackState.isPlaying && playbackState.currCommandIndex < playbackState.numCommands -1) {
       requestAnimationFrame(() => this.playbackLoop());
-    } else {
+    } 
+    else {
       playbackState.isPlaying = false;
     }
   }
