@@ -29,6 +29,12 @@ interface ToolState {
   opacity: number;
   pressure: number;
   isDrawing: boolean;
+  dirtyRegion: {
+    xMin: number;
+    xMax: number;
+    yMin: number;
+    yMax: number;
+  }
   x: number;
   y: number;
   flipX: boolean;
@@ -88,6 +94,7 @@ export class DrwRenderer {
     opacity: 1,
     pressure: 0,
     isDrawing: false,
+    dirtyRegion: {xMin: 0, yMin: 0, xMax: 0, yMax: 0},
     x: 0,
     y: 0,
     flipX: false,
@@ -313,6 +320,7 @@ export class DrwRenderer {
     const brushPoints = state.brushPoints;
     const brushRadius = state.brushRadius;
     const brushTexture = this.brushCanvas;
+    const dirtyRegion = state.dirtyRegion;
     // Brush strokes are normally drawn by "stamping" the brush texture (with drawImage()) along the stroke path
     // However, this technique doesn't play nicely with the HTML5 canvas API when the brush size is small,
     // for some reason strokes look smaller than they should be and are rather jaggy
@@ -360,10 +368,19 @@ export class DrwRenderer {
     }
     // Otherwise connect points with lines of brush stamps
     else if (brushPoints.length > 1) {
+      // Dirty region keeps track of the area of pixels changed by the brushstroke
+      dirtyRegion.xMin = this.width;
+      dirtyRegion.xMax = 0;
+      dirtyRegion.yMin = this.height;
+      dirtyRegion.yMax = 0;
       // For each stroke segment
       for (let i = 1; i < brushPoints.length - 1; i++) {
         const [x0, y0] = brushPoints[i - 1];
         const [x1, y1] = brushPoints[i];
+        dirtyRegion.xMin = Math.min(dirtyRegion.xMin, x0, x1);
+        dirtyRegion.yMin = Math.min(dirtyRegion.yMin, y0, y1);
+        dirtyRegion.xMax = Math.max(dirtyRegion.xMax, x0, x1);
+        dirtyRegion.yMax = Math.max(dirtyRegion.yMax, y0, y1);
         // Stamp brush allong stroke segment
         const dX = x1 - x0;
         const dY = y1 - y0;
@@ -377,8 +394,12 @@ export class DrwRenderer {
           ctx.drawImage(brushTexture, x - brushRadius, y - brushRadius);
         }
       }
+      const xMin = Math.floor(dirtyRegion.xMin - brushRadius);
+      const yMin = Math.floor(dirtyRegion.yMin - brushRadius);
+      const xMax = Math.ceil(dirtyRegion.xMax + brushRadius);
+      const yMax = Math.ceil(dirtyRegion.yMax + brushRadius);
       // Composite tmp brush layer to the active painting layer
-      state.activeLayerCtx.drawImage(this.tmpLayer.canvas, 0, 0);
+      state.activeLayerCtx.drawImage(this.tmpLayer.canvas, xMin, yMin, xMax - xMin, yMax - yMin, xMin, yMin, xMax - xMin, yMax - yMin);
     }
     // Clear stroke segments
     state.brushPoints = [];
