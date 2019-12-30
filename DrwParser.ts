@@ -28,10 +28,13 @@ export interface DrwHeader {
   name: string;
 };
 
+// XO and WII are technically not documented, but I found them after decompiling the Colors NDS Drawing Viewer app :^)
 export enum DrwPlatform {
   PLATFORM_NDS = 0,
   PLATFORM_PC = 1,
+  PLATFORM_XO = 2,
   PLATFORM_IOS = 3,
+  PLATFORM_WII = 4,
   PLATFORM_3DS = 6,
   PLATFORM_ANDROID = 7,
   PLATFORM_VITA = 8,

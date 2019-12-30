@@ -1,7 +1,5 @@
 // Extremely naive Colors .drw renderer, using the HTML5 canvas API
-// Most drw commands seem to work okay, however only very basic brushes are currently supported
-// This is good enough for general testing / debug, but can't (and probably never will) accurately render paintings
-// It would probably be a better idea to try implementimg brush rendering in webGL
+// This is good enough for general testing / debugging, but can't (and probably never will) completely render paintings
 
 import { 
   Color,
@@ -276,7 +274,12 @@ export class DrwRenderer {
           this.updateBrush();
         } 
         else {
-          if (cmd.flipX || cmd.flipY) this.flip(cmd.flipX, cmd.flipY);
+          if (cmd.flipX) {
+            this.flip(true, false);
+          } 
+          else if (cmd.flipY) {
+            this.flip(false, true);
+          }
           state.flipX = cmd.flipX;
           state.flipY = cmd.flipY;
           state.user = cmd.user; // not sure how meaningful changing user is, should it reset tool state?
@@ -330,18 +333,17 @@ export class DrwRenderer {
     // If we're using brush stamping, we wanna use a temp layer to draw the brush stroke to then composite that to the active layer in one go
     // Otherwise we can get away with drawing directly to the active layer
     const ctx = usePathApi ? state.activeLayerCtx : this.tmpLayer.ctx;
-    // Set up target canvas compositing
+    // Set up target layer compositing
     if (state.brushControl === BrushControl.BRUSHCONTROL_ERASER) {
       // destination-out: anything drawing to the canvas in this mode will erase content
       state.activeLayerCtx.globalCompositeOperation = 'destination-out';
-      // Using globalAlpha like this means the entire stroke can be drawn to the layer with a consistent alpha value
-      // This seems to be consistent with how Color's brushes work (or at least on 3DS)
-      // Also, eraser doesn't seem to use pressure, but I'm not sure if this is 100% correct?
-      state.activeLayerCtx.globalAlpha = state.pressure * state.opacity;
     }
-    // There's other BrushControl types but I'm unsure how to implement those :')
-    else {
+    // Using globalAlpha like this means the entire stroke can be drawn to the layer with a consistent alpha value
+    // This seems to be consistent with how Color's brushes work (or at least on 3DS?)
+    if ((state.brushControl & BrushControl.BRUSHCONTROL_VARIABLEOPACITY) || (state.brushControl & BrushControl.BRUSHCONTROL_VARIABLESIZE)) {
       state.activeLayerCtx.globalAlpha = state.pressure * state.opacity;
+    } else {
+      state.activeLayerCtx.globalAlpha = state.opacity;
     }
     // Clear tmp layer if we're going to stamp to it
     if (!usePathApi) {
