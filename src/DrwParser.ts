@@ -47,14 +47,14 @@ export const enum CommandType {
   TYPE_SIZECHANGE = 3,
 };
 
-export interface BrushCommand {
+export interface DrawCommand {
   type: CommandType.TYPE_DRAW;
   pressure: number;
   x: number;
   y: number;
 };
 
-export interface BrushEndCommand {
+export interface DrawEndCommand {
   type: CommandType.TYPE_DRAWEND;
   layer: number;
   layerAction: LayerAction; 
@@ -76,7 +76,7 @@ export interface SizeChangeCommand {
   opacity: number;
 };
 
-export type DrwCommand = BrushCommand | BrushEndCommand | ColorChangeCommand | SizeChangeCommand;
+export type DrwCommand = DrawCommand | DrawEndCommand | ColorChangeCommand | SizeChangeCommand;
 
 export enum BrushControl {
   BRUSHCONTROL_FULL = 0,
