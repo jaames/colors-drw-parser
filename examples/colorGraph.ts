@@ -1,4 +1,4 @@
-import { DrwParser, CommandType, Color } from './DrwParser';
+import { DrwParser, CommandType, Color } from '../src/DrwParser';
 
 function hsvToRgb(hsv: [number, number, number]) {
   const h = hsv[0] / 60;
@@ -259,6 +259,6 @@ DrwStats.loadFromUrl(url).then(stats => {
   const img = document.createElement('img');
   img.src = 'https://s3.amazonaws.com/colorslive/jpg_512x512/4389168-xHhXcU4tVYKUOK_V.jpg';
   document.body.appendChild(img);
-  img.style = 'position: fixed; top: 320px; right: 120px;'
+  img.style += 'position: fixed; top: 320px; right: 120px;'
 
 });

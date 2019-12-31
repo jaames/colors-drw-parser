@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
-import { DrwRenderer } from './DrwRenderer';
-import { DrwParser } from './DrwParser';
+import { DrwCanvasRenderer } from '../src/DrwCanvasRenderer';
+import { DrwParser } from '../src/DrwParser';
 
 // src: https://www.colorslive.com/details/4389509
 // const url = 'https://s3.amazonaws.com/colorslive/drw/4389509-GIl9DEC1z9V6g3W7.drw' // colorful anime
@@ -22,13 +22,13 @@ import { DrwParser } from './DrwParser';
 const url = `https://s3.amazonaws.com/colorslive/drw/1631771---ydOwTWZn1N2Wgb.drw` // bulbasaur
 
 DrwParser.loadFromUrl(url)
-.then(drw => new DrwRenderer(drw))
+.then(drw => new DrwCanvasRenderer(drw))
 .then(painter => painter.prepare())
 .then(painter => {
   painter.setCanvasWidth(960);
 
   painter.seekCommand(0);
-  painter.playbackState.commandsPerUpdate = 500;
+  painter.playbackRate = 500;
 
   const scene = new THREE.Scene();
   const camera = new THREE.PerspectiveCamera( 30, window.innerWidth / window.innerHeight, 1, 10000 );
