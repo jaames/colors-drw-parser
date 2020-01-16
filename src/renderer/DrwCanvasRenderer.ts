@@ -113,11 +113,7 @@ export class DrwCanvasRenderer extends DrwRendererBase<DrwCanvasRendererLayer> {
 
   protected finalizeStroke() {
     const activeLayer = this.activeLayer;
-   
     const state = this.toolState;
-    if (!activeLayer) {
-      console.log(state, activeLayer)
-    }
     const dirtyRegion = this.dirtyRegion;
     const brushPoints = this.brushPoints;
     const brushTexture = this.brushCanvas;

@@ -5,21 +5,12 @@ import {
   BrushType,
   LayerAction,
   DrwParser,
-} from './DrwParser';
+} from '../parser';
 
-interface ToolState {
-  user: number;
-  layer: number;
-  color: Color;
-  brushType: BrushType;
-  brushControl: BrushControl;
-  brushRadius: number;
-  opacity: number;
-  pressure: number;
-  isDrawing: boolean;
-  lastX: number;
-  lastY: number;
-};
+import {
+  ToolState,
+  UserState
+} from './State';
 
 interface PlaybackState {
   isPlaying: boolean;
@@ -28,6 +19,10 @@ interface PlaybackState {
   numCommands: number;
   updateCompleteCallback: () => void;
 };
+
+interface UserStates {
+  [key: number]: UserState
+}
 
 export abstract class DrwLayerBase {
   public width: number;
@@ -44,6 +39,11 @@ export abstract class DrwRendererBase<DrwLayer extends DrwLayerBase> {
   public drw: DrwParser;
   public layers: DrwLayer[];
 
+  public userStates: UserStates = {};
+
+  public alphaBuffer: Uint8ClampedArray;
+  public toolState: ToolState;
+
   protected playbackState: PlaybackState = {
     isPlaying: false,
     commandsPerUpdate: 200,
@@ -51,30 +51,17 @@ export abstract class DrwRendererBase<DrwLayer extends DrwLayerBase> {
     currCommandIndex: -1,
     updateCompleteCallback: () => {}
   };
-
-  protected toolState: ToolState = {
-    user: 0,
-    layer: 0,
-    color: [0, 0, 0],
-    brushType: BrushType.BRUSHTYPE_HARD,
-    brushControl: BrushControl.BRUSHCONTROL_VARIABLEOPACITY,
-    brushRadius: 20,
-    opacity: 1,
-    pressure: 0,
-    isDrawing: false,
-    lastX: 0,
-    lastY: 0,
-  };
   
-  constructor(drw: DrwParser) {
+  constructor(drw: DrwParser, layerProps: any = {}) {
     this.drw = drw;
     this.layers = [
-      this.createLayer(),
-      this.createLayer(),
-      this.createLayer(),
-      this.createLayer(),
-      this.createLayer(),
+      this.createLayer(layerProps),
+      this.createLayer(layerProps),
+      this.createLayer(layerProps),
+      this.createLayer(layerProps),
+      this.createLayer(layerProps),
     ];
+    this.setUser(0);
     this.setLayer(0);
     this.playbackState.numCommands = drw.numCommands;
   }
@@ -95,6 +82,15 @@ export abstract class DrwRendererBase<DrwLayer extends DrwLayerBase> {
     this.playbackState.commandsPerUpdate = newRate;
   }
 
+  protected setUser(userIndex: number) {
+    if (!(userIndex in this.userStates)) {
+      this.userStates[userIndex] = new UserState(this.width, this.height);
+    }
+    const userState = this.userStates[userIndex]
+    this.toolState = userState.toolState;
+    this.alphaBuffer = userState.alphaBuffer;
+  }
+
   /**
    * Misc
    */
@@ -107,7 +103,7 @@ export abstract class DrwRendererBase<DrwLayer extends DrwLayerBase> {
    */
 
   // createLayer() returns a new Layer instance with the current canvas width + height
-  protected abstract createLayer(): DrwLayer;
+  protected abstract createLayer(layerProps?: any): DrwLayer;
   // setLayer() sets the active painting layer to layerIndex
   protected setLayer(layerIndex: number) {
     this.toolState.layer = layerIndex;

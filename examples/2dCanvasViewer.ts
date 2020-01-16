@@ -16,7 +16,9 @@ import { DrwCanvasRenderer } from '../src/DrwCanvasRenderer';
 // const url = 'https://s3.amazonaws.com/colorslive/drw/4390461-2kkylw9MMz3bBhq5.drw' // bunny
 
 // src: https://www.colorslive.com/details/4389168
-const url = 'https://s3.amazonaws.com/colorslive/drw/4389168-xHhXcU4tVYKUOK_V.drw' // village
+// const url = 'https://s3.amazonaws.com/colorslive/drw/4389168-xHhXcU4tVYKUOK_V.drw' // village
+
+const url = 'https://s3.amazonaws.com/colorslive/drw/4394769-h0CoC5Slq3Y7Qf4r.drw'
 
 // Local debugging files
 
