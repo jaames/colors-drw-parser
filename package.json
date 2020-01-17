@@ -1,17 +1,24 @@
 {
   "name": "colors-drw-parser",
-  "version": "0.0.1",
+  "version": "1.0.0-beta",
   "description": "Experimental parser and renderer for Colors! painting files",
   "devDependencies": {
-    "parcel-bundler": "^1.12.4",
-    "three": "^0.112.0",
-    "typescript": "^3.7.4"
+    "copy-webpack-plugin": "^5.1.1",
+    "git-revision-webpack-plugin": "^3.0.4",
+    "html-webpack-plugin": "^3.2.0",
+    "raw-loader": "^4.0.0",
+    "typescript": "^3.7.5",
+    "ts-loader": "^6.2.1",
+    "webpack": "^4.41.5",
+    "webpack-cli": "^3.3.10",
+    "webpack-dev-server": "^3.10.1"
   },
   "scripts": {
-    "dev": "parcel index.html",
-    "build": "parcel build index.ts"
+    "start": "webpack-dev-server --mode=development --content ./",
+    "dev": "webpack --mode=development",
+    "build": "npm run dev && webpack --mode=production"
   },
   "keywords": [],
   "author": "",
-  "license": "ISC"
+  "license": "MIT"
 }

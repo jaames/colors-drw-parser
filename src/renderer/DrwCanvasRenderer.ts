@@ -2,11 +2,13 @@
 // This is good enough for general testing / debugging, but can't (and probably never will) accurately render every painting
 
 import { DrwLayerBase, DrwRendererBase } from './DrwRendererBase';
-import { DrwParser, BrushType, BrushControl } from './DrwParser';
+import { DrwParser, BrushType, BrushControl } from '../parser';
 
-import brushHardTex from '../brushtextures/brush_hard.png';
-import brushSoftTex from '../brushtextures/brush_soft.png';
-import brushBristleTex from '../brushtextures/brush_bristle.png';
+import brushHardTex from '../textures/brush_hard.png';
+import brushSoftTex from '../textures/brush_soft.png';
+import brushBristleTex from '../textures/brush_bristle.png';
+
+console.log(brushHardTex)
 
 class DrwCanvasRendererLayer extends DrwLayerBase {
   public canvas: HTMLCanvasElement;

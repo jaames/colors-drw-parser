@@ -1,13 +1,18 @@
 {
+  "include": [
+    "src/**/*"
+  ],
   "compilerOptions": {
     "target": "es5",
     "strict": true,
     "strictNullChecks": false,
+    "noImplicitAny": true,
     "jsx": "react",
     "module": "es2015",
     "moduleResolution": "node",
     "allowSyntheticDefaultImports": true,
-    "baseUrl": "./",
-    "lib": ["DOM", "ES2018"],
+    "baseUrl": "./src/",
+    "outDir": "./dist/",
+    "lib": ["dom", "es2018"],
   }
 }

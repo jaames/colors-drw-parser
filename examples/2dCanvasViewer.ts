@@ -1,5 +1,5 @@
-import { DrwParser } from '../src/DrwParser';
-import { DrwCanvasRenderer } from '../src/DrwCanvasRenderer';
+import { DrwParser } from '../src/parser';
+import { DrwCanvasRenderer } from '../src/renderer';
 
 // Test files sampled from Colors Gallery
 
