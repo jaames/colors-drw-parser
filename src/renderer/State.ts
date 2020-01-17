@@ -4,7 +4,12 @@ import {
   BrushType,
 } from '../parser';
 
+import {
+  Region
+} from './Region';
+
 export interface ToolState {
+  user: number;
   layer: number;
   color: Color;
   brushType: BrushType;
@@ -22,8 +27,10 @@ export interface ToolState {
 export class UserState {
 
   public alphaBuffer: Uint8ClampedArray;
+  public dirtyRegion: Region;
 
   public toolState: ToolState = {
+    user: 0,
     layer: 0,
     color: [0, 0, 0],
     brushType: BrushType.BRUSHTYPE_HARD,
@@ -40,6 +47,7 @@ export class UserState {
 
   constructor(width: number, height: number) {
     this.alphaBuffer = new Uint8ClampedArray(width * height);
+    this.dirtyRegion = new Region();
   }
 
 }

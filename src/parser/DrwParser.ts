@@ -3,6 +3,8 @@
 // Huge thanks to Jens Andersson from Collecting Smiles for providing documentation for their format :)
 // Docs: https://www.dropbox.com/s/fmjptpshi93bojp/DRW%20Format%201200.docx?dl=0
 
+// TODO: implement parsing from a .drw stream? 
+
 import { 
   DrwHeader, 
   DrwFlags, 
@@ -91,6 +93,7 @@ export class DrwParser {
         return {
           type: CommandType.TYPE_DRAW,
           pressure: pressure / 255,
+          // x and y range is 0 to 1, and should be multiplied by canvas width
           x: (x - 512) / 1024,
           y: (y - 512) / 1024,
         };
@@ -125,6 +128,7 @@ export class DrwParser {
         const opacity =      (cmd >> 24) & 0xFF;
         return {
           type: CommandType.TYPE_SIZECHANGE,
+          // size range is 0 to 1, and should be multiplied by canvas width to get the brush radius
           size: size / 0xFFFF,
           brushControl: brushControl,
           brushType: brushType,
@@ -133,14 +137,40 @@ export class DrwParser {
     }
   }
 
-  // Quick util to read a utf8 string from file
+  // Quick util to read a multibyte utf8 string from file
   // Strings will be read until max length (numBytes) or a null char (0x00) is encountered
   private readUtf8(offset: number, numBytes: number): string {
-    const chars = new Uint8Array(this.data.buffer, offset, numBytes);
+    const buffer = new Uint8Array(this.data.buffer, offset, numBytes);
+    let o = 0;
     let result = '';
-    for (let i = 0; i < chars.length; i++) {
-      const char = chars[i];
-      if (char === 0) break; // break string on null bytes
+    while (o < buffer.length) {
+      let char = 0;
+      // Break string on null bytes
+      if (buffer[o] === 0) {
+        break;
+      } else if (buffer[o] < 0x80) {
+        // Single byte char
+        char = buffer[o++];
+      } else if ((buffer[o] & 0xe0) == 0xc0) {
+        // Two byte char
+        char = ((buffer[o++] & 0x1f) <<  6) | 
+               ((buffer[o++] & 0x3f) <<  0);
+      } else if ((buffer[o] & 0xf0) == 0xe0) {
+        // Three byte char
+        char = ((buffer[o++] & 0x0f) << 12) |
+               ((buffer[o++] & 0x3f) <<  6) |
+               ((buffer[o++] & 0x3f) <<  0);
+      } else if ((buffer[0] & 0xf8) == 0xf0 && (buffer[0] <= 0xf4)) {
+        // Four byte char
+        char = ((buffer[o++] & 0x07) << 18) |
+               ((buffer[o++] & 0x3f) << 12) |
+               ((buffer[o++] & 0x3f) <<  6) |
+               ((buffer[o++] & 0x3f) <<  0);
+      } else {
+        // Byte is invalid; skip its
+        o++;
+        continue;
+      }
       result += String.fromCharCode(char);
     }
     return result;

@@ -8,8 +8,6 @@ import brushHardTex from '../textures/brush_hard.png';
 import brushSoftTex from '../textures/brush_soft.png';
 import brushBristleTex from '../textures/brush_bristle.png';
 
-console.log(brushHardTex)
-
 class DrwCanvasRendererLayer extends DrwLayerBase {
   public canvas: HTMLCanvasElement;
   public ctx: CanvasRenderingContext2D;
@@ -37,7 +35,6 @@ export class DrwCanvasRenderer extends DrwRendererBase<DrwCanvasRendererLayer> {
   private brushCanvas: HTMLCanvasElement;
   private brushCtx: CanvasRenderingContext2D;
   private brushPoints: [number, number][] = [];
-  private dirtyRegion = {xMin: 0, yMin: 0, xMax: 0, yMax: 0};
   
   constructor(drw: DrwParser) {
     super(drw);
@@ -107,10 +104,14 @@ export class DrwCanvasRenderer extends DrwRendererBase<DrwCanvasRendererLayer> {
 
   protected beginStroke(x: number, y: number, pressure: number) {
     this.brushPoints.push([x, y]);
+    this.dirtyRegion.reset();
   }
 
   protected strokeTo(x: number, y: number, pressure: number) {
     this.brushPoints.push([x, y]);
+    const brushRadius = this.toolState.brushRadius;
+    this.dirtyRegion.adjustForPoint(x - brushRadius, y - brushRadius);
+    this.dirtyRegion.adjustForPoint(x + brushRadius, y + brushRadius);
   }
 
   protected finalizeStroke() {
@@ -169,19 +170,10 @@ export class DrwCanvasRenderer extends DrwRendererBase<DrwCanvasRendererLayer> {
     }
     // Otherwise connect points with lines of brush stamps
     else if (brushPoints.length > 1) {
-      // Dirty region keeps track of the area of pixels changed by the brushstroke
-      dirtyRegion.xMin = this.width;
-      dirtyRegion.xMax = 0;
-      dirtyRegion.yMin = this.height;
-      dirtyRegion.yMax = 0;
       // For each stroke segment
       for (let i = 1; i < brushPoints.length - 1; i++) {
         const [x0, y0] = brushPoints[i - 1];
         const [x1, y1] = brushPoints[i];
-        dirtyRegion.xMin = Math.min(dirtyRegion.xMin, x0, x1);
-        dirtyRegion.yMin = Math.min(dirtyRegion.yMin, y0, y1);
-        dirtyRegion.xMax = Math.max(dirtyRegion.xMax, x0, x1);
-        dirtyRegion.yMax = Math.max(dirtyRegion.yMax, y0, y1);
         // Stamp brush allong stroke segment
         const dX = x1 - x0;
         const dY = y1 - y0;
@@ -195,12 +187,9 @@ export class DrwCanvasRenderer extends DrwRendererBase<DrwCanvasRendererLayer> {
           ctx.drawImage(brushTexture, x - brushRadius, y - brushRadius);
         }
       }
-      const xMin = Math.floor(dirtyRegion.xMin - brushRadius);
-      const yMin = Math.floor(dirtyRegion.yMin - brushRadius);
-      const xMax = Math.ceil(dirtyRegion.xMax + brushRadius);
-      const yMax = Math.ceil(dirtyRegion.yMax + brushRadius);
+      dirtyRegion.clampBounds(0, 0, this.width, this.height);
       // Composite tmp brush layer to the active painting layer
-      activeLayer.ctx.drawImage(this.tmpLayer.canvas, xMin, yMin, xMax - xMin, yMax - yMin, xMin, yMin, xMax - xMin, yMax - yMin);
+      activeLayer.ctx.drawImage(this.tmpLayer.canvas, dirtyRegion.xMin, dirtyRegion.yMin, dirtyRegion.width, dirtyRegion.height, dirtyRegion.xMin, dirtyRegion.yMin, dirtyRegion.width, dirtyRegion.height);
     }
     // Clear stroke segments
     this.brushPoints = [];

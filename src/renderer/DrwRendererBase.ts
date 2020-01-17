@@ -12,6 +12,10 @@ import {
   UserState
 } from './State';
 
+import {
+  Region
+} from './Region';
+
 interface PlaybackState {
   isPlaying: boolean;
   commandsPerUpdate: number;
@@ -42,6 +46,7 @@ export abstract class DrwRendererBase<DrwLayer extends DrwLayerBase> {
   public userStates: UserStates = {};
 
   public alphaBuffer: Uint8ClampedArray;
+  public dirtyRegion: Region;
   public toolState: ToolState;
 
   protected playbackState: PlaybackState = {
@@ -82,21 +87,26 @@ export abstract class DrwRendererBase<DrwLayer extends DrwLayerBase> {
     this.playbackState.commandsPerUpdate = newRate;
   }
 
-  protected setUser(userIndex: number) {
-    if (!(userIndex in this.userStates)) {
-      this.userStates[userIndex] = new UserState(this.width, this.height);
-    }
-    const userState = this.userStates[userIndex]
-    this.toolState = userState.toolState;
-    this.alphaBuffer = userState.alphaBuffer;
-  }
-
   /**
    * Misc
    */
 
-  // flip() should mirror all canvas layers along the given axis
+  // Mirror all canvas layers along the given axis
   protected abstract flip(flipX: boolean, flipY: boolean): void;
+
+  // Switch the user that's currently drawing
+  // Each user has their own tool state, drawing buffer, etc
+  protected setUser(userIndex: number) {
+    if (!(userIndex in this.userStates)) {
+      const newUserState = new UserState(this.width, this.height);
+      newUserState.toolState.user = userIndex;
+      this.userStates[userIndex] = newUserState;
+    }
+    const userState = this.userStates[userIndex]
+    this.toolState = userState.toolState;
+    this.alphaBuffer = userState.alphaBuffer;
+    this.dirtyRegion = userState.dirtyRegion;
+  }
 
   /**
    * Layer handling
