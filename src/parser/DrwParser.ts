@@ -3,12 +3,13 @@
 // Huge thanks to Jens Andersson from Collecting Smiles for providing documentation for their format :)
 // Docs: https://www.dropbox.com/s/fmjptpshi93bojp/DRW%20Format%201200.docx?dl=0
 
-// TODO: implement parsing from a .drw stream? 
+// TODO: handle orientation
+// TODO: implement parsing from a stream? 
 
 import { 
-  DrwHeader, 
   DrwFlags, 
-  DrwPlatform 
+  DrwPlatform,
+  DrwOrientation,
 } from './DrwHeader';
 
 import {
@@ -29,15 +30,49 @@ const LITTLE_ENDIAN = true;
 export class DrwParser {
 
   private data: DataView;
-  public header: DrwHeader;
+  public id: number;
+  public version: number;
+  public originalColorsVersion: number;
+  public colorsVersion: number;
+  public orientation: DrwOrientation;
+  public time: number;
+  public platform: DrwPlatform;
+  public numSaves: number; // number of times the file has been saved
+  public aspectRatio: number;
+  public flags: DrwFlags;
+  public galleryId: number;
+  public subPlatform: DrwPlatform; // not sure what this is?
+  public numCommands: number;
+  public author: string;
+  public originalAuthor: string;
+  public name: string;
 
   constructor(arrayBuffer: ArrayBuffer) {
-    this.data = new DataView(arrayBuffer);
-    this.header = this.getHeader();
-  }
-
-  get numCommands() {
-    return this.header.numCommands;
+    const data = new DataView(arrayBuffer);
+    this.data = data;
+    // Parse file header
+    const flags = this.data.getInt32(36, LITTLE_ENDIAN);
+    // return {
+    this.id =                    data.getInt32(0x00, LITTLE_ENDIAN);
+    this.version =               data.getInt32(0x04, LITTLE_ENDIAN);
+    this.originalColorsVersion = data.getInt32(0x08, LITTLE_ENDIAN);
+    this.colorsVersion =         data.getInt32(0x0C, LITTLE_ENDIAN);
+    this.orientation =           data.getInt32(0x10, LITTLE_ENDIAN),
+    this.time =                  data.getInt32(0x14, LITTLE_ENDIAN), // drawing time, in seconds
+    this.numSaves =              data.getInt32(0x18, LITTLE_ENDIAN),
+    this.platform =              data.getInt32(0x1C, LITTLE_ENDIAN),
+    this.aspectRatio =           data.getFloat32(0x20, LITTLE_ENDIAN), // width divided by height
+    this.flags = {
+        isDownloaded: ((flags << 0) & 0x1) == 1,
+        is3d:         ((flags << 1) & 0x1) == 1,
+      },
+    this.galleryId =            data.getInt32(0x28, LITTLE_ENDIAN),
+    this.subPlatform =          data.getInt32(0x2C, LITTLE_ENDIAN), // no idea what this means lol
+    // skip 12 unused(?) bytes
+    this.numCommands =          data.getInt32(0x3C, LITTLE_ENDIAN),
+    this.author =               this.readUtf8(0x40, 64),
+    this.originalAuthor =       this.readUtf8(0x80, 64),
+    this.name =                 this.readUtf8(0xC0, 128)
   }
 
   // Fetch a drw from a url
@@ -49,54 +84,28 @@ export class DrwParser {
       .then(data => new DrwParser(data));
   }
 
-  // Read file header, fairly straightforward
-  public getHeader(): DrwHeader {
-    const flags = this.data.getInt32(36, LITTLE_ENDIAN);
-    return {
-      id:                    this.data.getInt32(0x00, LITTLE_ENDIAN),
-      version:               this.data.getInt32(0x04, LITTLE_ENDIAN), 
-      originalColorsVersion: this.data.getInt32(0x08, LITTLE_ENDIAN),
-      colorsVersion:         this.data.getInt32(0x0C, LITTLE_ENDIAN),
-      orientation:           this.data.getInt32(0x10, LITTLE_ENDIAN),
-      time:                  this.data.getInt32(0x14, LITTLE_ENDIAN), // drawing time, in seconds
-      numSaves:              this.data.getInt32(0x18, LITTLE_ENDIAN),
-      platform:              this.data.getInt32(0x1C, LITTLE_ENDIAN),
-      aspectRatio:           this.data.getFloat32(0x20, LITTLE_ENDIAN), // width divided by height
-      flags: {
-        isDownloaded:        ((flags << 0) & 0x1) == 1,
-        is3d:                ((flags << 1) & 0x1) == 1,
-      },
-      galleryId:             this.data.getInt32(0x28, LITTLE_ENDIAN),
-      subPlatform:           this.data.getInt32(0x2C, LITTLE_ENDIAN), // no idea what this means lol
-      // skip 12 unused(?) bytes
-      numCommands:           this.data.getInt32(0x3C, LITTLE_ENDIAN),
-      author:                this.readUtf8(0x40, 64),
-      originalAuthor:        this.readUtf8(0x80, 64),
-      name:                  this.readUtf8(0xC0, 128)
-    };
-  }
-
   // Read drawing command
   public getCommand(index: number): DrwCommand {
     // Check if command is out of range
-    if (index > this.header.numCommands - 1) {
+    if (index > this.numCommands - 1) {
       return null;
     }
-    // offset = 320 (start of command stream) + 4 (size of command) * index
+    // Command offset = 320 (start of command stream) + 4 (size of command) * index
     const cmd = this.data.getInt32(320 + index * 4, LITTLE_ENDIAN);
-    const type = cmd & 0x3;
-    switch (type) {
+    // Handle command type
+    switch (cmd & 0x3) {
       case CommandType.TYPE_DRAW:
         const pressure = (cmd >> 2) & 0xFF;
-        const x =        (cmd >> 10) & 0x7FF;
-        const y =        (cmd >> 21) & 0x7FF;
+        const xRaw =     (cmd >> 10) & 0x7FF;
+        const yRaw =     (cmd >> 21) & 0x7FF;
         return {
           type: CommandType.TYPE_DRAW,
           pressure: pressure / 255,
-          // x and y range is 0 to 1, and should be multiplied by canvas width
-          x: (x - 512) / 1024,
-          y: (y - 512) / 1024,
+          // x and y range is 0 to 1, and should be multiplied by canvas width later
+          x: (xRaw - 512) / 1024,
+          y: (yRaw - 512) / 1024,
         };
+
       case CommandType.TYPE_DRAWEND:
         // 1 unused bit
         const layer =       (cmd >> 3) & 0xFF;
@@ -106,21 +115,23 @@ export class DrwParser {
           layer: layer === 0 ? null : (layer - 1),
           layerAction: layerAction
         };
+
       case CommandType.TYPE_COLORCHANGE:
         const b =     (cmd >> 2) & 0xFF;
         const g =     (cmd >> 10) & 0xFF;
         const r =     (cmd >> 18) & 0xFF;
-        const flipX = ((cmd >> 26) & 0x1);
-        const flipY = ((cmd >> 27) & 0x1);
+        const flipXRaw = ((cmd >> 26) & 0x1);
+        const flipYRaw = ((cmd >> 27) & 0x1);
         const user =  (cmd >> 28) & 0x7;
-        const isColorChange = (flipX === 0) && (flipY === 0) && (user === 0);
+        const isColorChange = (flipXRaw === 0) && (flipYRaw === 0) && (user === 0);
         return {
           type: CommandType.TYPE_COLORCHANGE,
           color: isColorChange ? [r, g, b] : null,
           user: user > 0 ? (user - 1) : null,
-          flipX: flipX === 1,
-          flipY: flipY === 1
+          flipX: flipXRaw === 1,
+          flipY: flipYRaw === 1
         };
+
       case CommandType.TYPE_SIZECHANGE:
         const size =         (cmd >> 2) & 0xFFFF;
         const brushControl = ((cmd >> 18) & 0x7);
@@ -167,7 +178,7 @@ export class DrwParser {
                ((buffer[o++] & 0x3f) <<  6) |
                ((buffer[o++] & 0x3f) <<  0);
       } else {
-        // Byte is invalid; skip its
+        // Byte is invalid; skip it
         o++;
         continue;
       }

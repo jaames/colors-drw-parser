@@ -12,26 +12,14 @@ export enum DrwPlatform {
   PLATFORM_SWITCH = 18
 };
 
+export enum DrwOrientation {
+  NORMAL = 0,
+  COUNTER_CLOCKWISE = 1,
+  CLOCKWISE = 2,
+  UPSIDE_DOWN = 3
+};
+
 export interface DrwFlags {
   isDownloaded: boolean;
   is3d: boolean;
-};
-
-export interface DrwHeader {
-  id: number;
-  version: number;
-  originalColorsVersion: number;
-  colorsVersion: number;
-  orientation: number;
-  time: number;
-  platform: DrwPlatform;
-  numSaves: number; // number of times the file has been saved
-  aspectRatio: number;
-  flags: DrwFlags;
-  galleryId: number;
-  subPlatform: DrwPlatform; // not sure what this is?
-  numCommands: number;
-  author: string;
-  originalAuthor: string;
-  name: string;
 };
