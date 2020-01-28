@@ -55,7 +55,7 @@ $ npm install
 **Start testing server**
 
 ```bash
-$ npm run dev
+$ npm run start
 ```
 
 **Build production JS files**

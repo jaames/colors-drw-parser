@@ -1,5 +1,6 @@
 // Extremely naive Colors .drw renderer, using the HTML5 canvas API
 // This is good enough for general testing / debugging, but can't (and probably never will) accurately render every painting
+// TL;DR please don't use this
 
 import { DrwLayerBase, DrwRendererBase } from './DrwRendererBase';
 import { DrwParser, BrushType, BrushControl } from '../parser';
@@ -77,8 +78,8 @@ export class DrwCanvasRenderer extends DrwRendererBase<DrwCanvasRendererLayer> {
     }
   }
 
-  public setCanvasWidth(width: number) {
-    super.setCanvasWidth(width);
+  public setSize(width: number, height?: number) {
+    super.setSize(width, height);
     this.tmpLayer.setSize(this.width, this.height);
   }
   
@@ -104,10 +105,13 @@ export class DrwCanvasRenderer extends DrwRendererBase<DrwCanvasRendererLayer> {
 
   protected beginStroke(x: number, y: number, pressure: number) {
     this.brushPoints.push([x, y]);
-    this.dirtyRegion.reset();
+    const brushRadius = this.toolState.brushRadius;
+    this.dirtyRegion.adjustForPoint(x - brushRadius, y - brushRadius);
+    this.dirtyRegion.adjustForPoint(x + brushRadius, y + brushRadius);
   }
 
   protected strokeTo(x: number, y: number, pressure: number) {
+    const toolState = this.toolState;
     this.brushPoints.push([x, y]);
     const brushRadius = this.toolState.brushRadius;
     this.dirtyRegion.adjustForPoint(x - brushRadius, y - brushRadius);
@@ -115,6 +119,9 @@ export class DrwCanvasRenderer extends DrwRendererBase<DrwCanvasRendererLayer> {
   }
 
   protected finalizeStroke() {
+    if (!this.dirtyRegion.hasChanged) {
+      return;
+    }
     const activeLayer = this.activeLayer;
     const state = this.toolState;
     const dirtyRegion = this.dirtyRegion;
@@ -126,7 +133,7 @@ export class DrwCanvasRenderer extends DrwRendererBase<DrwCanvasRendererLayer> {
     // for some reason strokes look smaller than they should be and are rather jaggy
     // For small sizes, we can use the builtin canvas path drawing API, which looks close enough for such small brush sizes
     // Path drawing is also a *lot* quicker, so it's a nice optimization
-    const usePathApi = brushRadius < 2;
+    const usePathApi = brushRadius < 1;
     // If we're using brush stamping, we wanna use a temp layer to draw the brush stroke to then composite that to the active layer in one go
     // Otherwise we can get away with drawing directly to the active layer
     const ctx = usePathApi ? activeLayer.ctx : this.tmpLayer.ctx;
@@ -189,7 +196,12 @@ export class DrwCanvasRenderer extends DrwRendererBase<DrwCanvasRendererLayer> {
       }
       dirtyRegion.clampBounds(0, 0, this.width, this.height);
       // Composite tmp brush layer to the active painting layer
-      activeLayer.ctx.drawImage(this.tmpLayer.canvas, dirtyRegion.xMin, dirtyRegion.yMin, dirtyRegion.width, dirtyRegion.height, dirtyRegion.xMin, dirtyRegion.yMin, dirtyRegion.width, dirtyRegion.height);
+      const xMin = dirtyRegion.xMin;
+      const yMin = dirtyRegion.yMin;
+      const width = dirtyRegion.width;
+      const height = dirtyRegion.height;
+      activeLayer.ctx.drawImage(this.tmpLayer.canvas, xMin, yMin, width, height, xMin, yMin, width, height);
+      dirtyRegion.reset();
     }
     // Clear stroke segments
     this.brushPoints = [];

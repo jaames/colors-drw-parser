@@ -7,22 +7,8 @@ import {
   DrwParser,
 } from '../parser';
 
-import {
-  ToolState,
-  UserState
-} from './State';
-
-import {
-  Region
-} from './Region';
-
-interface PlaybackState {
-  isPlaying: boolean;
-  commandsPerUpdate: number;
-  currCommandIndex: number;
-  numCommands: number;
-  updateCompleteCallback: () => void;
-};
+import { ToolState, UserState } from './State';
+import { Region } from './Region';
 
 interface UserStates {
   [key: number]: UserState
@@ -43,19 +29,11 @@ export abstract class DrwRendererBase<DrwLayer extends DrwLayerBase> {
   public drw: DrwParser;
   public layers: DrwLayer[];
 
-  public userStates: UserStates = {};
+  public userStates: Map<number, UserState> = new Map();
 
-  public alphaBuffer: Uint8ClampedArray;
+  public userState: UserState;
   public dirtyRegion: Region;
   public toolState: ToolState;
-
-  protected playbackState: PlaybackState = {
-    isPlaying: false,
-    commandsPerUpdate: 200,
-    numCommands: 0,
-    currCommandIndex: -1,
-    updateCompleteCallback: () => {}
-  };
   
   constructor(drw: DrwParser, layerProps: any = {}) {
     this.drw = drw;
@@ -68,23 +46,6 @@ export abstract class DrwRendererBase<DrwLayer extends DrwLayerBase> {
     ];
     this.setUser(0);
     this.setLayer(0);
-    this.playbackState.numCommands = drw.numCommands;
-  }
-
-  get meta() {
-    return this.drw.header;
-  }
-
-  get isPlaying() {
-    return this.playbackState.isPlaying;
-  }
-
-  get playbackRate() {
-    return this.playbackState.commandsPerUpdate;
-  }
-
-  set playbackRate(newRate: number) {
-    this.playbackState.commandsPerUpdate = newRate;
   }
 
   /**
@@ -97,14 +58,14 @@ export abstract class DrwRendererBase<DrwLayer extends DrwLayerBase> {
   // Switch the user that's currently drawing
   // Each user has their own tool state, drawing buffer, etc
   protected setUser(userIndex: number) {
-    if (!(userIndex in this.userStates)) {
+    if (!this.userStates.has(userIndex)) {
       const newUserState = new UserState(this.width, this.height);
       newUserState.toolState.user = userIndex;
-      this.userStates[userIndex] = newUserState;
+      this.userStates.set(userIndex, newUserState);
     }
-    const userState = this.userStates[userIndex]
+    const userState = this.userStates.get(userIndex);
+    this.userState = userState;
     this.toolState = userState.toolState;
-    this.alphaBuffer = userState.alphaBuffer;
     this.dirtyRegion = userState.dirtyRegion;
   }
 
@@ -156,84 +117,25 @@ export abstract class DrwRendererBase<DrwLayer extends DrwLayerBase> {
    * Used for setting canvas size, handling playback, etc
    */
 
-  public setCanvasWidth(width: number) {
-    const height = width / this.drw.header.aspectRatio;
+  public setSize(width: number, height?: number) {
     this.width = width;
-    this.height = height;
+    this.height = height === undefined ? width / this.drw.aspectRatio : height;
     this.layers.forEach(layer => {
-      layer.setSize(width, height);
+      layer.setSize(this.width, this.height);
+    });
+    this.userStates.forEach((userState) => {
+      userState.setBufferSize(this.width, this.height);
     });
   }
 
-  public seekCommand(newCommandIndex: number): void {
-    const playbackState = this.playbackState;
-    let startIndex;
-    // Don't allow the index to fall out of range
-    newCommandIndex = Math.min(Math.max(0, newCommandIndex), playbackState.numCommands - 1);
-    if (newCommandIndex < playbackState.currCommandIndex) {
-      // If the new command index comes before the current playback progress, we need to repaint from scratch
-      // Reset all layers
-      for (let i = 0; i < this.layers.length; i++) {
-        this.resetLayer(i);
-      }
-      startIndex = 0;
-    } else {
-      // Otherwise we can start after the current command
-      startIndex = playbackState.currCommandIndex + 1;
-    }
-    // Loop through all the commands needed to paint up to the new position
-    for (let cmd = startIndex; cmd <= newCommandIndex; cmd++) {
+  public render() {
+    for (let cmd = 0; cmd < this.drw.numCommands; cmd++) {
       this.handleCommand(cmd);
-    }
-    playbackState.updateCompleteCallback();
-  }
-
-  public seekStart() {
-    this.seekCommand(0);
-  }
-
-  public seekEnd() {
-    this.seekCommand(this.playbackState.numCommands - 1);
-  }
-
-  public seekNext() {
-    this.seekCommand(this.playbackState.currCommandIndex + 1);
-  }
-
-  public seekPrev() {
-    this.seekCommand(this.playbackState.currCommandIndex - 1);
-  }
-
-  public onUpdate(callback: () => void) {
-    this.playbackState.updateCompleteCallback = callback;
-  }
-
-  public play() {
-    const playbackState = this.playbackState;
-    playbackState.isPlaying = true;
-    requestAnimationFrame(() => this.playbackLoop());
-  }
-
-  public pause() {
-    this.playbackState.isPlaying = false;
-  }
-
-  /**
-   * Internal
-   */
-
-  private playbackLoop() {
-    const playbackState = this.playbackState;
-    this.seekCommand(playbackState.currCommandIndex + playbackState.commandsPerUpdate);
-    if (playbackState.isPlaying && playbackState.currCommandIndex < playbackState.numCommands -1) {
-      requestAnimationFrame(() => this.playbackLoop());
-    } else {
-      playbackState.isPlaying = false;
     }
   }
 
   // Handle drw command @ cmdIndex
-  private handleCommand(cmdIndex: number) {
+  public handleCommand(cmdIndex: number) {
     const cmd = this.drw.getCommand(cmdIndex);
     const toolState = this.toolState;
     switch (cmd.type) {
@@ -290,14 +192,13 @@ export abstract class DrwRendererBase<DrwLayer extends DrwLayerBase> {
         break;
       // TYPE_SIZECHANGE: changes the brush size, control, type and opacity 
       case CommandType.TYPE_SIZECHANGE:
-        // Can any of these change mid-stroke?
-        toolState.brushRadius = cmd.size * this.width;
+        const minBrushWidth = Math.max(this.width / 256, 1.25);
+        toolState.brushRadius = Math.max(cmd.size * this.width, minBrushWidth / 2);
         toolState.brushControl = cmd.brushControl;
         toolState.brushType = cmd.brushType;
         toolState.opacity = cmd.opacity;
         this.updateBrush();
         break;
     }
-    this.playbackState.currCommandIndex = cmdIndex;
   }
 }

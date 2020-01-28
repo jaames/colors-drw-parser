@@ -26,7 +26,11 @@ export interface ToolState {
 
 export class UserState {
 
-  public alphaBuffer: Uint8ClampedArray;
+  public imageWidth: number;
+  public imageHeight: number;
+  // Brush will be drawn here
+  public alphaBuffer: Uint8Array;
+  // Currently affected region
   public dirtyRegion: Region;
 
   public toolState: ToolState = {
@@ -46,7 +50,13 @@ export class UserState {
   };
 
   constructor(width: number, height: number) {
-    this.alphaBuffer = new Uint8ClampedArray(width * height);
+    this.setBufferSize(width, height);
+  }
+
+  setBufferSize(width: number, height: number) {
+    this.imageWidth = width;
+    this.imageHeight = height;
+    this.alphaBuffer = new Uint8Array(width * height);
     this.dirtyRegion = new Region();
   }
 

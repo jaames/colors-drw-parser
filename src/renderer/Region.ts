@@ -1,4 +1,5 @@
 export class Region {
+  public hasChanged: boolean;
   public xMin: number;
   public yMin: number;
   public xMax: number;
@@ -17,6 +18,7 @@ export class Region {
   }
 
   reset() {
+    this.hasChanged = false;
     this.xMin = 100000000;
     this.yMin = 100000000;
     this.xMax = -100000000;
@@ -25,6 +27,7 @@ export class Region {
 
   // Adjust region to combine point
   adjustForPoint(x: number, y: number) {
+    this.hasChanged = true;
     this.xMin = Math.min(this.xMin, x);
     this.yMin = Math.min(this.yMin, y);
     this.xMax = Math.max(this.xMax, x);
