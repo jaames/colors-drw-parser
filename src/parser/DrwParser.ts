@@ -57,22 +57,27 @@ export class DrwParser {
     this.version =               data.getInt32(0x04, LITTLE_ENDIAN);
     this.originalColorsVersion = data.getInt32(0x08, LITTLE_ENDIAN);
     this.colorsVersion =         data.getInt32(0x0C, LITTLE_ENDIAN);
-    this.orientation =           data.getInt32(0x10, LITTLE_ENDIAN),
-    this.time =                  data.getInt32(0x14, LITTLE_ENDIAN), // drawing time, in seconds
-    this.numSaves =              data.getInt32(0x18, LITTLE_ENDIAN),
-    this.platform =              data.getInt32(0x1C, LITTLE_ENDIAN),
-    this.aspectRatio =           data.getFloat32(0x20, LITTLE_ENDIAN), // width divided by height
+    this.orientation =           data.getInt32(0x10, LITTLE_ENDIAN);
+    this.time =                  data.getInt32(0x14, LITTLE_ENDIAN); // drawing time, in seconds
+    this.numSaves =              data.getInt32(0x18, LITTLE_ENDIAN);
+    this.platform =              data.getInt32(0x1C, LITTLE_ENDIAN);
+    this.aspectRatio =           data.getFloat32(0x20, LITTLE_ENDIAN); // width divided by height
     this.flags = {
-        isDownloaded: ((flags << 0) & 0x1) == 1,
-        is3d:         ((flags << 1) & 0x1) == 1,
-      },
-    this.galleryId =            data.getInt32(0x28, LITTLE_ENDIAN),
-    this.subPlatform =          data.getInt32(0x2C, LITTLE_ENDIAN), // no idea what this means lol
+      downloaded: ((flags >> 0) & 0x1) === 1,
+      is3d:       ((flags >> 1) & 0x1) === 1,
+      reference:  ((flags >> 4) & 0x1) === 1,
+      undo:       ((flags >> 8) & 0x1) === 1,
+      flip:       ((flags >> 9) & 0x1) === 1,
+      eyedrop:    ((flags >> 10) & 0x1) === 1,
+      eraser:     ((flags >> 26) & 0x1) === 1,
+    };
+    this.galleryId =            data.getInt32(0x28, LITTLE_ENDIAN);
+    this.subPlatform =          data.getInt32(0x2C, LITTLE_ENDIAN); // no idea what this means lol
     // skip 12 unused(?) bytes
-    this.numCommands =          data.getInt32(0x3C, LITTLE_ENDIAN),
-    this.author =               this.readUtf8(0x40, 64),
-    this.originalAuthor =       this.readUtf8(0x80, 64),
-    this.name =                 this.readUtf8(0xC0, 128)
+    this.numCommands =          data.getInt32(0x3C, LITTLE_ENDIAN);
+    this.author =               this.readUtf8(0x40, 64);
+    this.originalAuthor =       this.readUtf8(0x80, 64);
+    this.name =                 this.readUtf8(0xC0, 128);
   }
 
   // Fetch a drw from a url
@@ -92,7 +97,7 @@ export class DrwParser {
     }
     // Command offset = 320 (start of command stream) + 4 (size of command) * index
     const cmd = this.data.getInt32(320 + index * 4, LITTLE_ENDIAN);
-    // Handle command type
+    // Handle 2-bit command type
     switch (cmd & 0x3) {
       case CommandType.TYPE_DRAW:
         const pressure = (cmd >> 2) & 0xFF;

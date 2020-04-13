@@ -9,6 +9,8 @@ export enum DrwPlatform {
   PLATFORM_3DS = 6,
   PLATFORM_ANDROID = 7,
   PLATFORM_VITA = 8,
+  PLATFORM_SPEN = 12, // Galaxy S-Pen 
+  PLATFORM_WIN8 = 13,
   PLATFORM_SWITCH = 18
 };
 
@@ -20,6 +22,11 @@ export enum DrwOrientation {
 };
 
 export interface DrwFlags {
-  isDownloaded: boolean;
+  downloaded: boolean;
   is3d: boolean;
+  reference: boolean;
+  undo: boolean;
+  flip: boolean;
+  eyedrop: boolean;
+  eraser: boolean;
 };
