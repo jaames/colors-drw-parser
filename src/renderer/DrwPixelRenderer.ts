@@ -37,13 +37,14 @@ export class DrwPixelRenderer extends DrwRendererBase<DrwPixelLayer> {
     const dst = img.data;
     // const layerPixels = this.activeLayer.pixels;
     for (let layerIndex = 4; layerIndex >= 0; layerIndex--) {
-      const layer = this.layers[layerIndex];const src = layer.pixels;
+      const layer = this.layers[layerIndex];
+      const src = layer.pixels;
       for (let o = 0; o < dst.length; o += 4) {
         const a = src[o + 3] / 255;
-        dst[o + 0] = src[o + 0] + (1 - a) * dst[o + 0];
-        dst[o + 1] = src[o + 1] + (1 - a) * dst[o + 1];
-        dst[o + 2] = src[o + 2] + (1 - a) * dst[o + 2];
-        dst[o + 3] = src[o + 3] + (1 - a) * dst[o + 3];
+        dst[o + 0] = src[o + 0] + (1 - a) * dst[o + 0]; // r
+        dst[o + 1] = src[o + 1] + (1 - a) * dst[o + 1]; // g
+        dst[o + 2] = src[o + 2] + (1 - a) * dst[o + 2]; // b
+        dst[o + 3] = src[o + 3] + (1 - a) * dst[o + 3]; // a
       }
     }
     ctx.putImageData(img, 0, 0);
@@ -55,7 +56,7 @@ export class DrwPixelRenderer extends DrwRendererBase<DrwPixelLayer> {
 
   public setSize(width: number, height?: number) {
     super.setSize(width, height);
-    this.pixels = new Uint8ClampedArray(this.width * this.height * DrwPixelLayer.numChannels);
+    // this.pixels = new Uint8ClampedArray(this.width * this.height * DrwPixelLayer.numChannels);
     this.tmpPixelBuffer = new Uint8ClampedArray(this.width * this.height * DrwPixelLayer.numChannels);
   }
 
@@ -75,17 +76,17 @@ export class DrwPixelRenderer extends DrwRendererBase<DrwPixelLayer> {
     const low = lowLayer.pixels;
     for (let o = 0; o < dst.length; o += 4) {
       const a = top[o + 3] / 255;
-      dst[o + 0] = top[o + 0] + (1 - a) * low[o + 0];
-      dst[o + 1] = top[o + 1] + (1 - a) * low[o + 1];
-      dst[o + 2] = top[o + 2] + (1 - a) * low[o + 2];
-      dst[o + 3] = top[o + 3] + (1 - a) * low[o + 3];
+      dst[o + 0] = top[o + 0] + (1 - a) * low[o + 0]; // r
+      dst[o + 1] = top[o + 1] + (1 - a) * low[o + 1]; // g
+      dst[o + 2] = top[o + 2] + (1 - a) * low[o + 2]; // b
+      dst[o + 3] = top[o + 3] + (1 - a) * low[o + 3]; // a
     }
     // Mark layer as changed
     this.layers[dstLayerIndex].hasChanged = true;
   }
 
   protected clearLayer(layerIndex: number) {
-    const layer = this.layers[layerIndex]
+    const layer = this.layers[layerIndex];
     layer.pixels.fill(0);
     layer.hasChanged = true;
   }
@@ -97,16 +98,42 @@ export class DrwPixelRenderer extends DrwRendererBase<DrwPixelLayer> {
   protected updateBrush() {}
 
   protected flip(flipX: boolean, flipY: boolean) {
-    const activeLayer = this.activeLayer;
-
-
-    TODO: this should flip all the pixels in every layer
-
-    // Copy layer pixels to temp buffer
-    this.tmpPixelBuffer.set(activeLayer.pixels);
-    for (let y = 0; y <= this.height; y++) {
-
-    }
+    // TODO: find ways to speed this up.... it's super slow
+    this.layers.forEach(layer => {
+      // Copy layer pixels to temp buffer
+      this.tmpPixelBuffer.set(layer.pixels);
+      if (flipX)
+      {
+        for (let y = 0; y < this.height; y++)
+        {
+          for (let srcX = 0, dstX = this.width - 1; srcX < this.width; srcX++, dstX--)
+          {
+            const srcPtr = (y * this.width + srcX) * 4;
+            const dstPtr = (y * this.width + dstX) * 4;
+            layer.pixels[dstPtr] = this.tmpPixelBuffer[srcPtr];
+            layer.pixels[dstPtr + 1] = this.tmpPixelBuffer[srcPtr + 1];
+            layer.pixels[dstPtr + 2] = this.tmpPixelBuffer[srcPtr + 2];
+            layer.pixels[dstPtr + 3] = this.tmpPixelBuffer[srcPtr + 3];
+          }
+        }
+      }
+      else if (flipY)
+      {
+        for (let srcY = 0, dstY = this.height - 1; srcY < this.height; srcY++, dstY--)
+        {
+          for (let x = 0; x < this.width; x++)
+          {
+            const srcPtr = (srcY * this.width + x) * 4;
+            const dstPtr = (dstY * this.width + x) * 4;
+            layer.pixels[dstPtr] = this.tmpPixelBuffer[srcPtr];
+            layer.pixels[dstPtr + 1] = this.tmpPixelBuffer[srcPtr + 1];
+            layer.pixels[dstPtr + 2] = this.tmpPixelBuffer[srcPtr + 2];
+            layer.pixels[dstPtr + 3] = this.tmpPixelBuffer[srcPtr + 3];
+          }
+        }
+      }
+      layer.hasChanged = true;
+    });
   }
 
   protected beginStroke(x: number, y: number, pressure: number) {
