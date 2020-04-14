@@ -8,17 +8,31 @@ import {
   BrushControl
 } from '../parser';
 
+function clamp(n: number, min: number, max: number) {
+  return Math.min(Math.max(n, min), max);
+}
+
+type BrushCache = {
+  [key in BrushType]: Map<number, Uint8Array>;
+}
+
 export class BrushEngine {
 
-  public minBrushSize: number = 1.25;
+  private minBrushSize: number = 1.25;
   // Spacing between two brush stamps, these should be multiplied by brushSize
-  public minSpacing = 0.03;
-  public maxSpacing = 0.20;
+  private minSpacing = 0.03;
+  private maxSpacing = 0.20;
   // Spacing for bristle brush is handled differently
-  public bristleSpacing = 0.03;
-  public spacingAtAlpha = 2 / 256;
+  private bristleSpacing = 0.03;
+  private spacingAtAlpha = 2 / 256;
 
-  private getBrushWidth(userState: UserState, pressure: number) {
+  private brushCache: BrushCache = {
+    [BrushType.BRUSHTYPE_HARD]: new Map<number, Uint8Array>(),
+    [BrushType.BRUSHTYPE_SOFT]: new Map<number, Uint8Array>(),
+    [BrushType.BRUSHTYPE_BRISTLE]: new Map<number, Uint8Array>(),
+  };
+
+  private getBrushRadius(userState: UserState, pressure: number) {
     const toolState = userState.toolState;
     let size = 0;
     if (toolState.brushControl & BrushControl.BRUSHCONTROL_VARIABLESIZE) {
@@ -33,6 +47,13 @@ export class BrushEngine {
     return pressure * 255 * userState.toolState.opacity;
   }
 
+  private getCachedBrush(brushType: BrushType, width: number) {
+    if (this.brushCache[brushType].has(width)) {
+      return this.brushCache[brushType].get(width);
+    }
+    return null;
+  }
+
   drawBrush(userState: UserState, x: number, y: number, pressure: number) {
     // const alphaBuffer = userState.alphaBuffer;
     const imageWidth = userState.imageWidth;
@@ -40,30 +61,54 @@ export class BrushEngine {
     const alphaBuffer = userState.alphaBuffer;
     const dirtyRegion = userState.dirtyRegion;
     const aOpacity = this.getBrushOpacity(userState, pressure);
-    const brushWidth = this.getBrushWidth(userState, pressure);
+    const brushType = userState.toolState.brushType;
+    const brushWidth = this.getBrushRadius(userState, pressure) * 2;
     const halfBrushWidth = brushWidth / 2;
 
     const xMin = Math.floor(x - halfBrushWidth);
     const yMin = Math.floor(y - halfBrushWidth);
     const xMax = Math.ceil(x + halfBrushWidth);
     const yMax = Math.ceil(y + halfBrushWidth);
+
+    let brushPixels;
+    const cachedBrush = this.getCachedBrush(brushType, brushWidth);
+    if (cachedBrush) {
+      brushPixels = cachedBrush;
+    } else {
+      const w = xMax - xMin;
+      const h = yMax - yMin;
+      brushPixels = new Uint8Array(w * h);
+      const half = w / 2;
+      let ptr = 0;
+      for (let y = -half; y < half; y++) {
+        for (let x = -half; x < half; x++) {
+          brushPixels[ptr] = Math.hypot(x, y) < half ? aOpacity : 0;
+          ptr += 1;
+        }
+      }
+      this.brushCache[brushType].set(brushWidth, brushPixels);
+    }
+
     // adjust dirty rect
     dirtyRegion.adjustForPoint(xMin, yMin);
     dirtyRegion.adjustForPoint(xMax, yMax);
 
     const dstStride = imageWidth;
     
-    for (let y = yMin; y <= yMax; y++) {
+    for (let y = yMin, brushCoordY = 0; y < yMax; y++, brushCoordY++) {
       // Only run if y is within image bounds
       if (y < 0) continue;
       if (y >= imageWidth) break;
+      const srcOffset = brushCoordY * brushWidth;
       const dstOffset = y * dstStride;
-      for (let x = xMin; x <= xMax; x++) {
+      for (let x = xMin, brushCoordX = 0; x < xMax; x++, brushCoordX++) {
         if (x < 0) continue;
         if (x >= imageWidth) break;
+        const src = brushPixels[Math.floor(srcOffset + brushCoordX)];
         const base = alphaBuffer[dstOffset + x];
-        const src = (255 * aOpacity) >> 8;
-        if (src > 0) alphaBuffer[dstOffset + x] = Math.max(Math.min(src + base - ((src * base) >> 8), aOpacity ), base);
+        if (src > 0) {
+          alphaBuffer[dstOffset + x] = Math.max(Math.min(aOpacity + base - ((aOpacity * base) / 256), aOpacity), base);
+        }
       }
     }
   }
@@ -104,18 +149,19 @@ export class BrushEngine {
       spacing = Math.min(this.maxSpacing, Math.max(Math.abs(this.spacingAtAlpha / minBrushSize / (Math.abs(dA) * toolState.opacity)), this.minSpacing));
     }
 
-    let dSpacing = spacing * this.getBrushWidth(userState, pressure0);
+    let dSpacing = spacing * this.getBrushRadius(userState, pressure0);
   
     // Distance is too small to interpolate
     if (strokeDist < dSpacing) {
       // TODO: look into force_draw branch in source -- where does force_draw come from? is it useful?
       return false;
     }
-    // if (brushControl === BrushControl.BRUSHCONTROL_VARIABLESIZE || brushControl == BrushControl.BRUSHCONTROL_VARIABLESIZEOPACITY) {
-    //   while (strokeDist >= dSpacing) {
-    //     strokeDist -= dSpacing;
-    //   }
-    // }
+    else if (brushControl === BrushControl.BRUSHCONTROL_VARIABLESIZE || brushControl == BrushControl.BRUSHCONTROL_VARIABLESIZEOPACITY) {
+      // while (strokeDist >= dSpacing) {
+      //   strokeDist -= dSpacing;
+      // }
+      return;
+    }
     else {
       dX *= dSpacing;
       dY *= dSpacing;
@@ -132,7 +178,8 @@ export class BrushEngine {
 
   }
 
-  compositeIntoPixelBuffer(userState: UserState, outputBuffer: Uint8ClampedArray) {
+  compositeIntoPixelBuffer(userState: UserState, outputBuffer: Uint8ClampedArray) 
+  {
     const imageWidth = userState.imageWidth;
     const imageHeight = userState.imageHeight;
     const alphaBuffer = userState.alphaBuffer;
@@ -144,56 +191,62 @@ export class BrushEngine {
     let srcStride = imageWidth;
     let dstStride = imageWidth * 4;
 
-    if (toolState.brushControl === BrushControl.BRUSHCONTROL_ERASER) {
+    if (toolState.brushControl === BrushControl.BRUSHCONTROL_ERASER) 
+    {
       for (let y = dirtyRegion.yMin; y <= dirtyRegion.yMax; y++) {
-        let srcOffset = (y * srcStride) + dirtyRegion.xMin;
-        let dstOffset = (y * dstStride) + dirtyRegion.xMin * 4;
+        let srcPtr = (y * srcStride) + dirtyRegion.xMin;
+        let dstPtr = (y * dstStride) + dirtyRegion.xMin * 4;
         for (let x = dirtyRegion.xMin; x <= dirtyRegion.xMax; x++) {
-          const brushOpacity = alphaBuffer[srcOffset];
+          const brushOpacity = alphaBuffer[srcPtr];
           if (brushOpacity > 0) {
-            const currentR = outputBuffer[dstOffset];
-            const currentG = outputBuffer[dstOffset + 1];
-            const currentB = outputBuffer[dstOffset + 2];
-            const currentA = outputBuffer[dstOffset + 3];
+            const currentR = outputBuffer[dstPtr];
+            const currentG = outputBuffer[dstPtr + 1];
+            const currentB = outputBuffer[dstPtr + 2];
+            const currentA = outputBuffer[dstPtr + 3];
             const z = 255 - brushOpacity;
-            const dstR = (currentR * z) >> 8;
-            const dstG = (currentG * z) >> 8;
-            const dstB = (currentB * z) >> 8;
-            const dstA = (currentA * z) >> 8;
-            outputBuffer[dstOffset] = dstR;
-            outputBuffer[dstOffset + 1] = dstG;
-            outputBuffer[dstOffset + 2] = dstB;
-            outputBuffer[dstOffset + 3] = dstA;
+            const dstR = (currentR * z) / 256;
+            const dstG = (currentG * z) / 256;
+            const dstB = (currentB * z) / 256;
+            const dstA = (currentA * z) / 256;
+            outputBuffer[dstPtr] = dstR;
+            outputBuffer[dstPtr + 1] = dstG;
+            outputBuffer[dstPtr + 2] = dstB;
+            outputBuffer[dstPtr + 3] = dstA;
           }
-          srcOffset += 1;
-          dstOffset += 4;
+          srcPtr += 1;
+          dstPtr += 4;
         }
       }
-    } else {
+    }
+    else 
+    {
       const [strokeR, strokeG, strokeB] = toolState.color;
-      for (let y = dirtyRegion.yMin; y <= dirtyRegion.yMax; y++) {
-        let srcOffset = (y * srcStride) + dirtyRegion.xMin;
-        let dstOffset = (y * dstStride) + dirtyRegion.xMin * 4;
-        for (let x = dirtyRegion.xMin; x <= dirtyRegion.xMax; x++) {
-          const brushOpacity = alphaBuffer[srcOffset];
-          if (brushOpacity > 0) {
-            const currentR = outputBuffer[dstOffset];
-            const currentG = outputBuffer[dstOffset + 1];
-            const currentB = outputBuffer[dstOffset + 2];
-            const currentA = outputBuffer[dstOffset + 3];
+      for (let y = dirtyRegion.yMin; y <= dirtyRegion.yMax; y++) 
+      {
+        let srcPtr = (y * srcStride) + dirtyRegion.xMin;
+        let dstPtr = (y * dstStride) + dirtyRegion.xMin * 4;
+        for (let x = dirtyRegion.xMin; x <= dirtyRegion.xMax; x++) 
+        {
+          const brushOpacity = alphaBuffer[srcPtr];
+          if (brushOpacity > 0) 
+          {
+            const currentR = outputBuffer[dstPtr];
+            const currentG = outputBuffer[dstPtr + 1];
+            const currentB = outputBuffer[dstPtr + 2];
+            const currentA = outputBuffer[dstPtr + 3];
             const z = 255 - brushOpacity;
-            const dstR = ((brushOpacity * strokeR + brushOpacity) >> 8) + ((z * currentR + z) >> 8);
-            const dstG = ((brushOpacity * strokeG + brushOpacity) >> 8) + ((z * currentG + z) >> 8);
-            const dstB = ((brushOpacity * strokeB + brushOpacity) >> 8) + ((z * currentB + z) >> 8);
-            const dstA =  brushOpacity + ((z * currentA + z) >> 8);
-            outputBuffer[dstOffset] = dstR;
-            outputBuffer[dstOffset + 1] = dstG;
-            outputBuffer[dstOffset + 2] = dstB;
-            outputBuffer[dstOffset + 3] = dstA;
+            const dstR = ((brushOpacity * strokeR + brushOpacity) + (z * currentR + z)) / 256;
+            const dstG = ((brushOpacity * strokeG + brushOpacity) + (z * currentG + z)) / 256;
+            const dstB = ((brushOpacity * strokeB + brushOpacity) + (z * currentB + z)) / 256;
+            const dstA =  brushOpacity + ((z * currentA + z) / 256);
+            outputBuffer[dstPtr] = dstR;
+            outputBuffer[dstPtr + 1] = dstG;
+            outputBuffer[dstPtr + 2] = dstB;
+            outputBuffer[dstPtr + 3] = dstA;
           }
   
-          srcOffset += 1;
-          dstOffset += 4;
+          srcPtr += 1;
+          dstPtr += 4;
         }
       }
     }

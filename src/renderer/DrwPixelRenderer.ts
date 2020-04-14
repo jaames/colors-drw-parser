@@ -5,13 +5,14 @@ import { BrushEngine } from './BrushEngine';
 
 class DrwPixelLayer extends DrwLayerBase {
 
-  static numChannels: number = 4;
+  static elementSize: number = 4;
 
   public pixels: Uint8ClampedArray;
   public hasChanged: boolean = false;
 
   setSize(width: number, height: number) {
-    this.pixels = new Uint8ClampedArray(width * height * DrwPixelLayer.numChannels);
+    
+    this.pixels = new Uint8ClampedArray(width * height * DrwPixelLayer.elementSize);
   }
 
 }
@@ -40,7 +41,7 @@ export class DrwPixelRenderer extends DrwRendererBase<DrwPixelLayer> {
       const layer = this.layers[layerIndex];
       const src = layer.pixels;
       for (let o = 0; o < dst.length; o += 4) {
-        const a = src[o + 3] / 255;
+        const a = src[o + 3] / 255; // src alpha
         dst[o + 0] = src[o + 0] + (1 - a) * dst[o + 0]; // r
         dst[o + 1] = src[o + 1] + (1 - a) * dst[o + 1]; // g
         dst[o + 2] = src[o + 2] + (1 - a) * dst[o + 2]; // b
@@ -56,8 +57,7 @@ export class DrwPixelRenderer extends DrwRendererBase<DrwPixelLayer> {
 
   public setSize(width: number, height?: number) {
     super.setSize(width, height);
-    // this.pixels = new Uint8ClampedArray(this.width * this.height * DrwPixelLayer.numChannels);
-    this.tmpPixelBuffer = new Uint8ClampedArray(this.width * this.height * DrwPixelLayer.numChannels);
+    this.tmpPixelBuffer = new Uint8ClampedArray(this.width * this.height * DrwPixelLayer.elementSize);
   }
 
   protected setLayer(layerIndex: number) {
@@ -99,6 +99,8 @@ export class DrwPixelRenderer extends DrwRendererBase<DrwPixelLayer> {
 
   protected flip(flipX: boolean, flipY: boolean) {
     // TODO: find ways to speed this up.... it's super slow
+    // ideas:
+    //        https://codereview.stackexchange.com/questions/29618/image-flip-algorithm-in-c
     this.layers.forEach(layer => {
       // Copy layer pixels to temp buffer
       this.tmpPixelBuffer.set(layer.pixels);

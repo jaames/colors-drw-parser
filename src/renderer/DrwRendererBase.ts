@@ -11,7 +11,7 @@ import { ToolState, UserState } from './State';
 import { Region } from './Region';
 
 interface UserStates {
-  [key: number]: UserState
+  [key: number]: UserState;
 }
 
 export abstract class DrwLayerBase {

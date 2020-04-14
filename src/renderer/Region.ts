@@ -25,7 +25,7 @@ export class Region {
     this.yMax = -100000000;
   }
 
-  // Adjust region to combine point
+  // Adjust region to contain point (x, y)
   adjustForPoint(x: number, y: number) {
     this.hasChanged = true;
     this.xMin = Math.min(this.xMin, x);
