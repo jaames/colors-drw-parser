@@ -28,5 +28,17 @@ export interface DrwFlags {
   undo: boolean;
   flip: boolean;
   eyedrop: boolean;
+  nsfw: boolean;
   eraser: boolean;
+};
+
+export const enum DrwFlagMasks {
+  FLAG_DOWNLOADED = 1 << 0,
+  FLAG_IS_3D = 1 << 1,
+  FLAG_REFERENCE = 1 << 4,
+  FLAG_UNDO = 1 << 8,
+  FLAG_FLIP = 1 << 9,
+  FLAG_EYEDROP = 1 << 10,
+  FLAG_NSFW = 1 << 19,
+  FLAG_ERASER = 1 << 26,
 };

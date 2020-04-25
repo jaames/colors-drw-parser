@@ -7,7 +7,8 @@
 // TODO: implement parsing from a stream? 
 
 import { 
-  DrwFlags, 
+  DrwFlags,
+  DrwFlagMasks,
   DrwPlatform,
   DrwOrientation,
 } from './DrwHeader';
@@ -62,14 +63,16 @@ export class DrwParser {
     this.numSaves =              data.getInt32(0x18, LITTLE_ENDIAN);
     this.platform =              data.getInt32(0x1C, LITTLE_ENDIAN);
     this.aspectRatio =           data.getFloat32(0x20, LITTLE_ENDIAN); // width divided by height
+    // There's definitely more flags, these are just the ones I managed to reverse-engineer since they weren't documented :)
     this.flags = {
-      downloaded: ((flags >> 0) & 0x1) === 1,
-      is3d:       ((flags >> 1) & 0x1) === 1,
-      reference:  ((flags >> 4) & 0x1) === 1,
-      undo:       ((flags >> 8) & 0x1) === 1,
-      flip:       ((flags >> 9) & 0x1) === 1,
-      eyedrop:    ((flags >> 10) & 0x1) === 1,
-      eraser:     ((flags >> 26) & 0x1) === 1,
+      downloaded: (flags & DrwFlagMasks.FLAG_DOWNLOADED) !== 0,
+      is3d:       (flags & DrwFlagMasks.FLAG_IS_3D) !== 0,
+      reference:  (flags & DrwFlagMasks.FLAG_REFERENCE) !== 0,
+      undo:       (flags & DrwFlagMasks.FLAG_UNDO) !== 0,
+      flip:       (flags & DrwFlagMasks.FLAG_FLIP) !== 0,
+      eyedrop:    (flags & DrwFlagMasks.FLAG_EYEDROP) !== 0,
+      nsfw:       (flags & DrwFlagMasks.FLAG_NSFW) !== 0,
+      eraser:     (flags & DrwFlagMasks.FLAG_ERASER) !== 0,
     };
     this.galleryId =            data.getInt32(0x28, LITTLE_ENDIAN);
     this.subPlatform =          data.getInt32(0x2C, LITTLE_ENDIAN); // no idea what this means lol
