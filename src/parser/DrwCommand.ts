@@ -1,6 +1,6 @@
 export type Color = [number, number, number]; // r, g, b
 
-export enum BrushControl {
+export const enum BrushControl {
   BRUSHCONTROL_FULL = 0,
   BRUSHCONTROL_VARIABLEOPACITY = 1,
   BRUSHCONTROL_VARIABLESIZE = 2,
@@ -9,13 +9,13 @@ export enum BrushControl {
   BRUSHCONTROL_ERASER = 5,
 };
 
-export enum BrushType {
+export const enum BrushType {
   BRUSHTYPE_HARD = 0,
   BRUSHTYPE_SOFT = 1,
   BRUSHTYPE_BRISTLE = 2,
 };
 
-export enum LayerAction {
+export const enum LayerAction {
   LAYERACTION_SET = 0,
   LAYERACTION_NEWPOS = 1,
   LAYERACTION_CLEAR = 2,

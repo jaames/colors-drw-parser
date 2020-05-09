@@ -26,6 +26,7 @@ export abstract class DrwRendererBase<DrwLayer extends DrwLayerBase> {
 
   public width: number;
   public height: number;
+  public aspectRatio: number = 1;
   public drw: DrwParser;
   public layers: DrwLayer[];
 
@@ -35,8 +36,11 @@ export abstract class DrwRendererBase<DrwLayer extends DrwLayerBase> {
   public dirtyRegion: Region;
   public toolState: ToolState;
   
-  constructor(drw: DrwParser, layerProps: any = {}) {
-    this.drw = drw;
+  constructor(drw?: DrwParser, layerProps: any = {}) {
+    if (drw !== undefined) {
+      this.drw = drw;
+      this.aspectRatio = drw.aspectRatio;
+    }
     this.layers = [
       this.createLayer(layerProps),
       this.createLayer(layerProps),
@@ -119,7 +123,7 @@ export abstract class DrwRendererBase<DrwLayer extends DrwLayerBase> {
 
   public setSize(width: number, height?: number) {
     this.width = width;
-    this.height = height === undefined ? width / this.drw.aspectRatio : height;
+    this.height = height === undefined ? width / this.aspectRatio : height;
     this.layers.forEach(layer => {
       layer.setSize(this.width, this.height);
     });
@@ -148,7 +152,7 @@ export abstract class DrwRendererBase<DrwLayer extends DrwLayerBase> {
         } else {
           this.strokeTo(x, y, cmd.pressure);
         }
-        toolState.pressure = cmd.pressure;
+        toolState.lastPressure = cmd.pressure;
         toolState.lastX = x;
         toolState.lastY = y;
         toolState.isDrawing = true;

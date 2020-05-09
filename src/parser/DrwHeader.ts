@@ -1,6 +1,6 @@
 // PLATFORM_XO and PLATFORM_WII are unreleased versions of Colors, found in the Colors Drw Viewer app
 // PLATFORM_SWITCH inferred from a painting made with the Colors Live Switch alpha: https://www.colorslive.com/details/4394769
-export enum DrwPlatform {
+export const enum DrwPlatform {
   PLATFORM_NDS = 0,
   PLATFORM_PC = 1,
   PLATFORM_XO = 2,
@@ -14,7 +14,21 @@ export enum DrwPlatform {
   PLATFORM_SWITCH = 18
 };
 
-export enum DrwOrientation {
+export const DrwPlatformStrings = {
+  [DrwPlatform.PLATFORM_NDS]: "Nintendo DS",
+  [DrwPlatform.PLATFORM_PC]: "PC",
+  [DrwPlatform.PLATFORM_XO]: "PC",
+  [DrwPlatform.PLATFORM_IOS]: "iOS device",
+  [DrwPlatform.PLATFORM_WII]: "PC",
+  [DrwPlatform.PLATFORM_3DS]: "Nintendo 3DS",
+  [DrwPlatform.PLATFORM_ANDROID]: "Android device",
+  [DrwPlatform.PLATFORM_VITA]: "Playstation Vita",
+  [DrwPlatform.PLATFORM_SPEN]: "Galaxy S-Pen",
+  [DrwPlatform.PLATFORM_WIN8]: "PC",
+  [DrwPlatform.PLATFORM_SWITCH]: "Nintendo Switch",
+};
+
+export const enum DrwOrientation {
   NORMAL = 0,
   COUNTER_CLOCKWISE = 1,
   CLOCKWISE = 2,

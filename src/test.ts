@@ -1,6 +1,8 @@
 import Colors from './index';
 import { DrwParser, DrwCanvasRenderer, DrwPixelRenderer } from './index';
 
+// import switchDrw from '../demofiles/switchtest.drw';
+
 const TEST_IMAGES = {
   'voyager': '4341327-dhdAP4wQrMzHgbyD',
   'anime': '4389509-GIl9DEC1z9V6g3W7',
@@ -31,6 +33,27 @@ renderResult.style.flex = '1';
 renderTarget.style.flex = '1';
 document.body.appendChild(renderResult);
 document.body.appendChild(renderTarget);
+
+const renderer = new DrwPixelRenderer();
+(window as any).renderer = renderer;
+
+renderer.setSize(512);
+outputCtx.canvas.height = renderer.height;
+outputCtx.canvas.width = renderer.width;
+
+renderer.beginStroke(100, 100, 0.05);
+renderer.strokeTo(300, 300, 1);
+renderer.finalizeStroke();
+
+// const m1 = performance.now();
+// renderer.brushTest();
+// const m2 = performance.now();
+
+
+// renderer.render();
+// Draw the result to the main canvas
+renderer.blitTo(outputCtx);
+
 
 function loadDrw(key: string) {
 

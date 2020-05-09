@@ -25,7 +25,7 @@ export class DrwPixelRenderer extends DrwRendererBase<DrwPixelLayer> {
 
   private tmpPixelBuffer: Uint8ClampedArray;
 
-  constructor(drw: DrwParser) {
+  constructor(drw?: DrwParser) {
     super(drw);
     this.brushEngine = new BrushEngine();
   }
@@ -51,7 +51,7 @@ export class DrwPixelRenderer extends DrwRendererBase<DrwPixelLayer> {
     ctx.putImageData(img, 0, 0);
   }
 
-  protected createLayer() {
+  public createLayer() {
     return new DrwPixelLayer();
   }
 
@@ -60,12 +60,12 @@ export class DrwPixelRenderer extends DrwRendererBase<DrwPixelLayer> {
     this.tmpPixelBuffer = new Uint8ClampedArray(this.width * this.height * DrwPixelLayer.elementSize);
   }
 
-  protected setLayer(layerIndex: number) {
+  public setLayer(layerIndex: number) {
     super.setLayer(layerIndex);
     this.activeLayer = this.layers[layerIndex];
   }
 
-  protected copyLayer(srcLayerIndex: number, dstLayerIndex: number) {
+  public copyLayer(srcLayerIndex: number, dstLayerIndex: number) {
     const isSrcLower = srcLayerIndex > dstLayerIndex; // (higher layer index value = lower layer)
     const dstLayer = this.layers[dstLayerIndex];
     const srcLayer = this.layers[srcLayerIndex];
@@ -85,19 +85,19 @@ export class DrwPixelRenderer extends DrwRendererBase<DrwPixelLayer> {
     this.layers[dstLayerIndex].hasChanged = true;
   }
 
-  protected clearLayer(layerIndex: number) {
+  public clearLayer(layerIndex: number) {
     const layer = this.layers[layerIndex];
     layer.pixels.fill(0);
     layer.hasChanged = true;
   }
 
-  protected resetLayer(layerIndex: number) {
+  public resetLayer(layerIndex: number) {
     this.clearLayer(layerIndex);
   }
 
-  protected updateBrush() {}
+  public updateBrush() {}
 
-  protected flip(flipX: boolean, flipY: boolean) {
+  public flip(flipX: boolean, flipY: boolean) {
     // TODO: find ways to speed this up.... it's super slow
     // ideas:
     //        https://codereview.stackexchange.com/questions/29618/image-flip-algorithm-in-c
@@ -138,16 +138,23 @@ export class DrwPixelRenderer extends DrwRendererBase<DrwPixelLayer> {
     });
   }
 
-  protected beginStroke(x: number, y: number, pressure: number) {
+  public beginStroke(x: number, y: number, pressure: number) {
+    const toolState = this.toolState;
     this.brushEngine.drawBrush(this.userState, x, y, pressure);
+    toolState.lastPressure = pressure;
+    toolState.lastX = x;
+    toolState.lastY = y;
   }
 
-  protected strokeTo(x: number, y: number, pressure: number) {
+  public strokeTo(x: number, y: number, pressure: number) {
     const toolState = this.toolState;
     this.brushEngine.drawBrushStroke(this.userState, toolState.lastX, toolState.lastY, toolState.lastPressure, x, y, pressure);
+    toolState.lastPressure = pressure;
+    toolState.lastX = x;
+    toolState.lastY = y;
   }
 
-  protected finalizeStroke() {
+  public finalizeStroke() {
     const dirtyRegion = this.userState.dirtyRegion;
     const activeLayer = this.activeLayer;
     if (dirtyRegion.hasChanged) {

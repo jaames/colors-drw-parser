@@ -10,6 +10,7 @@ import {
   DrwFlags,
   DrwFlagMasks,
   DrwPlatform,
+  DrwPlatformStrings,
   DrwOrientation,
 } from './DrwHeader';
 
@@ -38,6 +39,7 @@ export class DrwParser {
   public orientation: DrwOrientation;
   public time: number;
   public platform: DrwPlatform;
+  public platformString: string;
   public numSaves: number; // number of times the file has been saved
   public aspectRatio: number;
   public flags: DrwFlags;
@@ -53,7 +55,6 @@ export class DrwParser {
     this.data = data;
     // Parse file header
     const flags = this.data.getInt32(36, LITTLE_ENDIAN);
-    // return {
     this.id =                    data.getInt32(0x00, LITTLE_ENDIAN);
     this.version =               data.getInt32(0x04, LITTLE_ENDIAN);
     this.originalColorsVersion = data.getInt32(0x08, LITTLE_ENDIAN);
@@ -62,6 +63,7 @@ export class DrwParser {
     this.time =                  data.getInt32(0x14, LITTLE_ENDIAN); // drawing time, in seconds
     this.numSaves =              data.getInt32(0x18, LITTLE_ENDIAN);
     this.platform =              data.getInt32(0x1C, LITTLE_ENDIAN);
+    this.platformString = DrwPlatformStrings[this.platform];
     this.aspectRatio =           data.getFloat32(0x20, LITTLE_ENDIAN); // width divided by height
     // There's definitely more flags, these are just the ones I managed to reverse-engineer since they weren't documented :)
     this.flags = {

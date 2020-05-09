@@ -37,7 +37,7 @@ export class DrwCanvasRenderer extends DrwRendererBase<DrwCanvasRendererLayer> {
   private brushCtx: CanvasRenderingContext2D;
   private brushPoints: [number, number][] = [];
   
-  constructor(drw: DrwParser) {
+  constructor(drw?: DrwParser) {
     super(drw);
     this.brushCanvas = document.createElement('canvas');
     this.brushCtx = this.brushCanvas.getContext('2d');

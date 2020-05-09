@@ -60,9 +60,9 @@ export class BrushEngine {
     const imageHeight = userState.imageHeight;
     const alphaBuffer = userState.alphaBuffer;
     const dirtyRegion = userState.dirtyRegion;
-    const aOpacity = this.getBrushOpacity(userState, pressure);
     const brushType = userState.toolState.brushType;
     const brushWidth = this.getBrushRadius(userState, pressure) * 2;
+    const brushOpacity = this.getBrushOpacity(userState, pressure);
     const halfBrushWidth = brushWidth / 2;
 
     const xMin = Math.floor(x - halfBrushWidth);
@@ -82,7 +82,7 @@ export class BrushEngine {
       let ptr = 0;
       for (let y = -half; y < half; y++) {
         for (let x = -half; x < half; x++) {
-          brushPixels[ptr] = Math.hypot(x, y) < half ? aOpacity : 0;
+          brushPixels[ptr] = Math.hypot(x, y) < half ? brushOpacity : 0;
           ptr += 1;
         }
       }
@@ -107,7 +107,7 @@ export class BrushEngine {
         const src = brushPixels[Math.floor(srcOffset + brushCoordX)];
         const base = alphaBuffer[dstOffset + x];
         if (src > 0) {
-          alphaBuffer[dstOffset + x] = Math.max(Math.min(aOpacity + base - ((aOpacity * base) / 256), aOpacity), base);
+          alphaBuffer[dstOffset + x] = clamp(brushOpacity + base - ((brushOpacity * base) / 256), base, brushOpacity);
         }
       }
     }
