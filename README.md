@@ -1,3 +1,10 @@
+> ⚠️ This project was just a programming/learning experient. It is not a tool for end-users, and never will be.
+> If you want to export your Colors paintings at a high resolution, your best bet is to ask for help in the Colors Live Discord server!! :)
+>
+> Also, this project was written before Colors Live (for Nintendo Switch, PC, etc). As such it does not support paintings from this version of Colors.
+>
+> While I was part of the Colors Live development team from 2020 - 2023, this is not offically affiliated with or supported by Collecting Smiles. 
+
 # colors-drw-parser
  
 An experimental parser and renderer for the .drw image format used by [Colors](http://colorslive.com/); a painting application for Nintendo 3DS, iOS, Android and PlayStation Vita.
